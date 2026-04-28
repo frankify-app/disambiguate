@@ -20,14 +20,18 @@ help:
 
 .SECONDEXPANSION:
 
-include .env
+-include .env
 export
 
 RUN := uv run
 PYTHON := uv python
-RUN_MODULE := $(PYTHON) -m
 SRC_PATH := src/disambiguate
 TEST_PATH := tests
+DEV_CLI_PATH := dev_cli.py
+UNIT_TEST_PATH := tests/unit
+E2E_TEST_PATH := tests/e2e
+VERSION := $(shell uv version --short)
+CLAUDE_BUNDLE := dist/disambiguate-v$(VERSION)-claude-bundle.zip
 
 .env:
 	cp .env.example $@
@@ -41,13 +45,20 @@ install: .env install-uv
 install-uv:
 	uv sync
 
-.PHONY: install-pip ## Installs all dependencies via pip
-install-pip:
-	$(RUN_MODULE) pip install -r requirements.txt
+.PHONY: build ## Builds the package
+build:
+	uv build
 
-.PHONY: requirements.txt ## Refresh requirements.txt file
-requirements.txt:
-	uv pip export -f requirements.txt --output requirements.txt
+.PHONY: build-claude-bundle ## Builds the Claude release bundle for the current version
+build-claude-bundle:
+	$(MAKE) $(CLAUDE_BUNDLE)
+
+dist/disambiguate-v%-claude-bundle.zip: build
+	bash scripts/build_claude_bundle.sh "$*"
+
+.PHONY: clean ## Cleans the build artifacts
+clean:
+	rm -rf dist/
 
 .PHONY: check ## Runs all code checks and tests
 check: auto-format lint type-check test
@@ -56,21 +67,26 @@ check: auto-format lint type-check test
 type-check: mypy
 
 .PHONY: auto-format ## Auto-format all code
-auto-format: $(SRC_PATH) $(TEST_PATH)
-	$(RUN) black $^
-	$(RUN) isort $^
-	$(RUN) ruff --fix $^
+auto-format: $(SRC_PATH) $(TEST_PATH) $(DEV_CLI_PATH)
+	$(RUN) ruff check --fix $^
+	$(RUN) ruff format $^
 
 .PHONY: lint ## Run all linters
-lint: mypy
+lint: $(SRC_PATH) $(TEST_PATH) $(DEV_CLI_PATH)
+	$(RUN) ruff check $^
+	$(RUN) ruff format --check $^
 
 .PHONY: mypy ## Run mypy
-mypy: $(SRC_PATH) tests
+mypy: $(SRC_PATH) $(TEST_PATH) $(DEV_CLI_PATH)
 	$(RUN) mypy $^
 
-.PHONY: main ## Runs the main program
+.PHONY: main ## Runs the main program (default disambiguate invocation)
 main:
-	$(RUN) disambiguate add 21 42
+	$(RUN) python $(DEV_CLI_PATH)
+
+.PHONY: explain ## Runs --explain via the development CLI
+explain:
+	$(RUN) python $(DEV_CLI_PATH) --explain
 
 .PHONY: run ## Run everything
 run: main
@@ -80,8 +96,12 @@ test: unit-test e2e-test
 
 .PHONY: unit-test ## Run all unit tests
 unit-test:
-	$(RUN) pytest -v -s --disable-warnings $(TEST_PATH)/unit
+	$(RUN) pytest $(UNIT_TEST_PATH)
 
 .PHONY: e2e-test ## Run all end-to-end tests
 e2e-test:
-	echo "No e2e tests yet"
+	$(RUN) pytest $(E2E_TEST_PATH)
+
+.PHONY: dogfood ## Lint the project's own glossary against the README root
+dogfood:
+	$(RUN) python $(DEV_CLI_PATH) --lint

@@ -1,11 +1,13 @@
-"""Make the CLI runnable using python -m disambiguate."""
+"""Make the CLI runnable via `python -m disambiguate`."""
+
+from __future__ import annotations
 
 import sys
 
-from .cli import app
+from .cli import main
 
-if "__main__" == __name__:
+if __name__ == "__main__":
     try:
-        exit(app(prog_name="disambiguate"))
-    except KeyboardInterrupt:  # Avoid traceback on Ctrl+C
+        sys.exit(main())
+    except KeyboardInterrupt:
         sys.exit("\nERROR: Interrupted by user")

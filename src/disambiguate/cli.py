@@ -1,122 +1,297 @@
+"""
+Command-line entry point.
+
+Argparse-driven dispatch with four operating modes:
+
+- default: render selected slugs (or whole glossary) using the user's glossary
+- `--from <doc>`: extract slugs from a document, then render
+- `--explain`: render Disambiguate's own bundled glossary, with preamble
+- `--lint`: validate the user's glossary
+"""
+
+from __future__ import annotations
+
+import argparse
 import logging
+import os
+import re
+import shlex
+import sys
+from collections.abc import Sequence
+from pathlib import Path
 
-import typer
-from colorama import Fore, Style
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-from . import __author__, __email__, __version__
-from .Calculator import Calculator
+from . import __version__, bundled
+from .discovery import (
+    GlossaryNotFoundError,
+    RepoRootNotFoundError,
+    RootFileMissingError,
+    expand_root_specs,
+    find_glossary,
+    resolve_default_root,
+)
+from .from_mode import BrokenFromLinkError, extract_slugs
+from .glossary import DuplicateSlugError, Glossary, load_glossary
+from .lint import lint_glossary
+from .logging_config import DEBUG_LEVEL, configure_logging
+from .renderer import build_explain_preamble, render_terms
+from .resolver import CycleError, UnknownSlugError, resolve
 
 logger = logging.getLogger(__name__)
 
+EXIT_OK = 0
+EXIT_FAILURE = 1
+EXIT_USAGE = 2
 
-class AppConfig(BaseSettings):
-    """Configuration settings for the application."""
+# Canonical slug alphabet: lowercase ASCII letters, digits, and hyphen.
+_NON_SLUG_CHARS = re.compile(r"[^a-z0-9-]")
+_DASH_RUN = re.compile(r"-+")
 
-    log_level: int | str
 
-    model_config = SettingsConfigDict(
-        env_file=(".env", ".env.secret"),
-        env_file_encoding="utf-8",
+def _build_parser() -> argparse.ArgumentParser:
+    """Build the argparse parser, including the bundled-term epilog list."""
+    epilog_lines = ["terms (use with --explain):"] + [
+        f"  * {t}" for t in bundled.bundled_term_slugs()
+    ]
+    parser = argparse.ArgumentParser(
+        prog="disambiguate",
+        description=(
+            "Resolve markdown glossary terms and their transitive "
+            "dependencies in topological order."
+        ),
+        epilog="\n".join(epilog_lines),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument(
+        "slugs",
+        nargs="*",
+        help="Canonical names or slugs to render. Empty = render whole glossary.",
+    )
+    parser.add_argument(
+        "--glossary",
+        metavar="DIR",
+        help=(
+            "Override glossary directory (default: auto-discover "
+            "`docs/glossary/` or `glossary/` walking up from cwd; "
+            "env var DISAMBIGUATE_GLOSSARY)."
+        ),
+    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument(
+        "--from",
+        dest="from_doc",
+        metavar="DOC",
+        help=(
+            "Extract glossary-shaped links from DOC and resolve them. "
+            "Use `-` or omit to read stdin."
+        ),
+        nargs="?",
+        const="-",
+    )
+    mode.add_argument(
+        "--explain",
+        dest="explain",
+        action="store_true",
+        help=(
+            "Render Disambiguate's format spec for one or more TERMs. "
+            "With no TERM, render the entire bundled glossary. "
+            "Available terms are listed below."
+        ),
+    )
+    mode.add_argument(
+        "--lint",
+        dest="lint",
+        action="store_true",
+        help="Validate the glossary against six fatal checks.",
+    )
+    parser.add_argument(
+        "--roots",
+        metavar="PATH",
+        nargs="+",
+        help=(
+            "Lint roots: paths and globs reachability is measured from. "
+            "Default: <repo-root>/README.md. "
+            "Env var DISAMBIGUATE_ROOTS (space-separated)."
+        ),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase log verbosity (-v=INFO, -vv=DEBUG).",
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"disambiguate {__version__}",
+    )
+    return parser
 
 
-app = typer.Typer(
-    epilog=__doc__,
-    help=f"{__package__} version {__version__} by {__author__} <{__email__}>",
-    name="memoria",
-)
-
-
-VERBOSITY_LEVELS = {0: logging.ERROR, 1: logging.WARNING, 2: logging.INFO}
-
-
-def setup_logging(
-    log_level: int | str | None = None, verbosity: int | None = None
-) -> int:
+def _user_glossary_path(arg_value: str | None) -> Path:
     """
-    Configure logging based on provided log level or verbosity.
+    Resolve the active user-glossary directory.
 
-    log_level: Specific log level (int or str).
-    verbosity: Verbosity level to determine log level.
+    Precedence: `--glossary` flag > `DISAMBIGUATE_GLOSSARY` env > auto-discovery.
+    """
+    if arg_value is not None:
+        return Path(arg_value).resolve()
+    env_value = os.environ.get("DISAMBIGUATE_GLOSSARY")
+    if env_value:
+        return Path(env_value).resolve()
+    return find_glossary(start=Path.cwd())
+
+
+def _resolve_lint_roots(arg_roots: list[str] | None) -> list[Path]:
+    """
+    Resolve the lint roots from flag, env, or default.
+
+    Precedence: `--roots` flag > `DISAMBIGUATE_ROOTS` env (space-separated)
+    > `<repo-root>/README.md`.
+    """
+    if arg_roots is not None:
+        return expand_root_specs(arg_roots)
+    env_value = os.environ.get("DISAMBIGUATE_ROOTS")
+    if env_value:
+        # Space-separated. Documented constraint: paths cannot contain
+        # spaces. We expand globs ourselves so the env var can carry
+        # patterns regardless of shell expansion.
+        return expand_root_specs(shlex.split(env_value))
+    return resolve_default_root(start=Path.cwd())
+
+
+def _read_from_doc(path_arg: str) -> str:
+    """Read the source document for `--from`. `-` means stdin."""
+    if path_arg == "-":
+        return sys.stdin.read()
+    return Path(path_arg).read_text(encoding="utf-8")
+
+
+def _normalize_requested_slug(slug: str) -> str:
+    """
+    Normalize one direct CLI slug argument.
+
+    slug: raw positional CLI argument.
 
     Returns
     -------
-        int: Effective log level.
+    A lowercase slug where every character outside `a-z`, `0-9`, and `-`
+    is replaced with `-`, and consecutive dashes are collapsed.
 
     """
-    level: int | str
-    if verbosity is not None:
-        level = VERBOSITY_LEVELS.get(verbosity, logging.DEBUG)
-    elif log_level is not None:
-        level = log_level.upper() if isinstance(log_level, str) else log_level
-    else:
-        level = logging.WARNING
-
-    format_str = (
-        f"{Style.BRIGHT}{Fore.CYAN}%(asctime)s{Style.RESET_ALL}"
-        f" {Style.BRIGHT}{Fore.MAGENTA}%(levelname)s{Style.RESET_ALL}"
-        f" %(message)s"
-    )
-    logging.basicConfig(level=level, force=True, format=format_str)
-
-    return logging.getLogger().getEffectiveLevel()
+    normalized = _NON_SLUG_CHARS.sub("-", slug.lower())
+    return _DASH_RUN.sub("-", normalized)
 
 
-MAIN_ARG_LOG_LEVEL_OPTION = typer.Option(
-    None,
-    "--log-level",
-    help="Set the specific log level (e.g., 10 or DEBUG, 20 or INFO, etc.).",
-    envvar="LOG_LEVEL",
-)
-MAIN_ARG_VERBOSITY_OPTION = typer.Option(
-    0,
-    "--verbosity",
-    "-v",
-    count=True,
-    help="Increase verbosity if no log-level is defined.",
-)
-
-
-@app.callback()
-def main(
-    ctx: typer.Context,
-    log_level: str | None = MAIN_ARG_LOG_LEVEL_OPTION,
-    verbosity: int | None = MAIN_ARG_VERBOSITY_OPTION,
-) -> None:
+def _normalize_requested_slugs(slugs: list[str]) -> list[str]:
     """
-    Main entry point for the CLI, handling global options.
+    Normalize direct CLI slug arguments before resolver lookup.
 
-    ctx: Typer context object.
-    log_level: Specific log level to set.
-    verbosity: Verbosity level for logging.
+    slugs: raw positional CLI arguments.
+
+    Returns
+    -------
+    Slugs suitable for lookup. Phrase arguments like "topological order" and
+    punctuation-heavy arguments like "topological___order" become
+    "topological-order".
+
     """
-    ctx.obj = AppConfig(log_level=setup_logging(log_level, verbosity))
+    # DECISION:IFACE — Direct CLI requests now accept phrase-shaped terms by
+    # normalizing every character outside the canonical slug alphabet.
+    return [_normalize_requested_slug(slug) for slug in slugs]
 
 
-ARG_ADD_A: int = typer.Argument(..., help="The first number.")
-ARG_ADD_B: int = typer.Argument(..., help="The second number.")
+def _run_lint(glossary: Glossary, roots: list[Path]) -> int:
+    """Run lint and report findings to stderr; return exit code."""
+    findings = lint_glossary(glossary, roots=roots)
+    if not findings:
+        return EXIT_OK
+    for finding in findings:
+        # Lint findings go to stderr — they are diagnostics for the user,
+        # not the tool's primary output, and stderr keeps stdout clean for
+        # composing with pipes.
+        print(f"{finding.kind}: {finding.message}", file=sys.stderr)
+    return EXIT_FAILURE
 
 
-@app.command("add")
-def add(
-    ctx: typer.Context,
-    a: int = ARG_ADD_A,
-    b: int = ARG_ADD_B,
-) -> None:
+def _run_default(glossary: Glossary, slugs: list[str]) -> int:
+    """Resolve the requested slugs and print to stdout."""
+    terms = resolve(glossary, _normalize_requested_slugs(slugs))
+    print(render_terms(terms), end="")
+    return EXIT_OK
+
+
+def _run_from(glossary: Glossary, from_doc: str) -> int:
+    """Extract slugs from a document and resolve them."""
+    text = _read_from_doc(from_doc)
+    slugs = extract_slugs(text, glossary)
+    terms = resolve(glossary, slugs)
+    print(render_terms(terms), end="")
+    return EXIT_OK
+
+
+def _run_explain(slugs: list[str]) -> int:
+    """Render the bundled glossary with the agent-targeted preamble."""
+    glossary = bundled.load_bundled_glossary()
+    # `--explain` ignores --glossary and DISAMBIGUATE_GLOSSARY by design:
+    # the user wants Disambiguate's own spec, not whatever local glossary
+    # might be in scope.
+    normalized_slugs = _normalize_requested_slugs(slugs)
+    terms = resolve(glossary, normalized_slugs)
+    preamble = build_explain_preamble(normalized_slugs)
+    print(render_terms(terms, preamble=preamble), end="")
+    return EXIT_OK
+
+
+def main(argv: Sequence[str] | None = None) -> int:
     """
-    Add command for the calculator.
+    CLI entry point.
 
-    a: The first number.
-    b: The second number.
+    argv: argument list (excluding program name). Defaults to `sys.argv[1:]`.
+
+    Returns
+    -------
+    Exit code: 0 success, 1 failure (broken term, lint error, etc.), 2 usage
+    error. Exceptions are caught at the boundary and converted to exit 1;
+    tracebacks only surface with `-vv`.
+
     """
-    config = ctx.obj
-    logger.info("Starting app with log_level=%s", config.log_level)
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+    effective_level = configure_logging(args.verbose)
 
-    calculator = Calculator(a, b)
-    result = calculator.add()
-    print(f"The result is: {result}")
+    try:
+        if args.explain:
+            return _run_explain(list(args.slugs))
+
+        if args.lint:
+            glossary = load_glossary(_user_glossary_path(args.glossary))
+            roots = _resolve_lint_roots(args.roots)
+            return _run_lint(glossary, roots)
+
+        if args.from_doc is not None:
+            glossary = load_glossary(_user_glossary_path(args.glossary))
+            return _run_from(glossary, args.from_doc)
+
+        glossary = load_glossary(_user_glossary_path(args.glossary))
+        return _run_default(glossary, list(args.slugs))
+    except (
+        UnknownSlugError,
+        CycleError,
+        BrokenFromLinkError,
+        DuplicateSlugError,
+        GlossaryNotFoundError,
+        RepoRootNotFoundError,
+        RootFileMissingError,
+        FileNotFoundError,
+    ) as e:
+        # Tracebacks would be noise here. With -vv we re-raise to let the
+        # debugger / shell see the full traceback.
+        if effective_level <= DEBUG_LEVEL:
+            raise
+        logger.error("%s", e)
+        return EXIT_FAILURE
 
 
 if __name__ == "__main__":
-    app()
+    sys.exit(main())

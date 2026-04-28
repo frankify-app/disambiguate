@@ -4,9 +4,6 @@
   <a href="https://github.com/frankify-app/disambiguate/actions/workflows/ci.yml?query=branch%3Amain">
     <img src="https://img.shields.io/github/actions/workflow/status/frankify-app/disambiguate/ci.yml?branch=main&label=CI&logo=github&style=flat-square" alt="CI Status" >
   </a>
-  <a href="https://disambiguate.readthedocs.io">
-    <img src="https://img.shields.io/readthedocs/disambiguate.svg?logo=read-the-docs&logoColor=fff&style=flat-square" alt="Documentation Status">
-  </a>
   <a href="https://codecov.io/gh/frankify-app/disambiguate">
     <img src="https://img.shields.io/codecov/c/github/frankify-app/disambiguate.svg?logo=codecov&logoColor=fff&style=flat-square" alt="Test coverage percentage">
   </a>
@@ -32,38 +29,51 @@
 
 ---
 
-**Documentation**: <a href="https://disambiguate.readthedocs.io" target="_blank">https://disambiguate.readthedocs.io </a>
-
 **Source Code**: <a href="https://github.com/frankify-app/disambiguate" target="_blank">https://github.com/frankify-app/disambiguate </a>
 
 ---
 
-A tool to resolve markdown glossary terms and their transitive dependencies in topological order in a GitHub project or Obsidian vault.
+Disambiguate resolves markdown glossary terms and their transitive
+dependencies in topological order. Point it at a directory of `*.md` term
+files in either [GitHub format](docs/glossary/github-format.md) or
+[Obsidian format](docs/glossary/obsidian-format.md), ask for a slug or two,
+and get back a self-contained markdown document where every term is
+defined before it is referenced.
+
+## Quickstart
+
+```bash
+uvx disambiguate                       # render the entire glossary
+uvx disambiguate topological-order     # render one term and its dependency closure
+uvx disambiguate --from notes.md       # extract glossary-shaped links from a doc
+uvx disambiguate --explain             # render Disambiguate's own bundled spec
+uvx disambiguate --lint                # validate the glossary
+```
+
+The runtime is stdlib-only — `pip install disambiguate` brings in nothing
+else. `uvx` works without an explicit install.
 
 ## Installation
 
-Install this via pip (or your favourite package manager):
+```bash
+pip install disambiguate
+```
 
-`pip install disambiguate`
+## How it works
 
-## Contributors ✨
+The pipeline parses each [term](docs/glossary/term.md) into a body plus a
+list of [cross-references](docs/glossary/cross-reference.md), builds a
+[dependency](docs/glossary/dependency.md) graph from those references, then
+runs the [resolver](docs/glossary/resolver.md) to produce
+[topological order](docs/glossary/topological-order.md). The same pipeline
+backs [from-mode](docs/glossary/from-mode.md) and `--explain`.
 
-Thanks goes to these wonderful people ([emoji key](https://allcontributors.org/docs/en/emoji-key)):
+For the architectural map, see [docs/architecture.md](docs/architecture.md).
+For the full vocabulary, see the
+[bundled glossary](docs/glossary/disambiguate.md) — Disambiguate's own
+dogfood.
 
-<!-- prettier-ignore-start -->
-<!-- ALL-CONTRIBUTORS-LIST:START - Do not remove or modify this section -->
-<!-- markdownlint-disable -->
-<!-- markdownlint-enable -->
-<!-- ALL-CONTRIBUTORS-LIST:END -->
-<!-- prettier-ignore-end -->
+## Contributing
 
-This project follows the [all-contributors](https://github.com/all-contributors/all-contributors) specification. Contributions of any kind welcome!
-
-## Credits
-
-[![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-inverted-border-orange.json)](https://github.com/copier-org/copier)
-
-This package was created with
-[Copier](https://copier.readthedocs.io/) and the
-[browniebroke/pypackage-template](https://github.com/browniebroke/pypackage-template)
-project template.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Conventional commits required —
+the release workflow uses them to compute the next version.
