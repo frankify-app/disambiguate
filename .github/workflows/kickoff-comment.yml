@@ -1,0 +1,150 @@
+name: Issue Kickoff Comment
+
+on:
+  issues:
+    types: [opened, edited]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: "Issue number to post the kickoff comment on"
+        required: true
+        type: string
+
+permissions:
+  issues: write
+
+jobs:
+  kickoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const MARKER = '<!-- kickoff-comment:v1 -->';
+
+            // Resolve the issue from either the event payload (automatic run)
+            // or a fetched lookup by number (manual run).
+            let issue;
+            if (context.eventName === 'workflow_dispatch') {
+              const { data } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: Number(context.payload.inputs.issue_number),
+              });
+              issue = data;
+            } else {
+              issue = context.payload.issue;
+            }
+
+            const number = issue.number;
+            const title = issue.title;
+            const body = issue.body || '';
+
+            // Extract the "## Kickoff Steps" section: everything between that
+            // heading and the next `##` heading (or end of body).
+            const sectionMatch = body.match(
+              /^##\s+Kickoff Steps\s*$([\s\S]*?)(?=^##\s|\Z)/m
+            );
+            var steps = [];
+            if (sectionMatch) {
+              steps = [...sectionMatch[1].matchAll(/^\s*-\s+\[[ xX]\]\s+(.+?)\s*$/gm)]
+                .map(m => m[1]);
+            }
+
+            // Detect "_Originally posted by @... in <PR discussion URL>_" markers.
+            // Extract all referenced discussion URLs (deduplicated, in order).
+            const originUrls = [];
+            const seenUrls = new Set();
+            const originRegex = /_Originally posted by @[\w-]+ in (https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/pull\/\d+#discussion_r\d+)_/g;
+            for (const m of body.matchAll(originRegex)) {
+              const url = m[1];
+              if (!seenUrls.has(url)) {
+                seenUrls.add(url);
+                originUrls.push(url);
+              }
+            }
+
+            // Derive branch slug from title: lowercase, non-alphanumerics -> "-",
+            // collapse repeats, trim, cap at 50 chars.
+            const slug = title
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-+|-+$/g, '')
+              .slice(0, 50)
+              .replace(/-+$/, '');
+
+            const repo = `${context.repo.owner}/${context.repo.repo}`;
+            const processLines = [
+              '- Write out your plan',
+              '- Follow skills',
+              ...steps.map(s => `- ${s}`),
+              '- Ensure lint, format etc are fine',
+              '- Push branch, link branch in issue',
+              '- Open PR, link PR in issue',
+            ];
+
+            // Follow-up preamble if PR discussion origin markers are present.
+            const preambleLines = [];
+            if (originUrls.length > 0) {
+              const phrase = originUrls.length === 1
+                ? 'line this comment corresponds'
+                : 'lines these comments correspond';
+              preambleLines.push(
+                `Determine which ${phrase} to in the current codebase:`,
+                '',
+                ...originUrls.map(u => `* ${u}`),
+                '',
+                'Use GH_TOKEN as fallback if you fail to access it.',
+                '',
+                'Understand the problem discussed, then proceed to read the issue:',
+                '',
+              );
+            }
+
+            const commentBody = [
+              MARKER,
+              '```',
+              ...preambleLines,
+              `Issue: https://github.com/${repo}/issues/${number}`,
+              `Slug: ${title}`,
+              '',
+              `Get the issue (use get-user-issue script if it gets cut off), name this session: \`Disambiguate#${number}: ${slug}\``,
+              `Name this branch \`claude/${number}-${slug}\``,
+              '',
+              'Process:',
+              ...processLines,
+              '```',
+            ].join('\n');
+
+            // Look for an existing kickoff comment by marker.
+            const existing = await github.paginate(github.rest.issues.listComments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              per_page: 100,
+            });
+            const prior = existing.find(c => c.body && c.body.includes(MARKER));
+
+            if (!prior) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: number,
+                body: commentBody,
+              });
+              core.info('Posted new kickoff comment.');
+              return;
+            }
+
+            if (prior.body === commentBody) {
+              core.info('Existing kickoff comment is up to date — no change.');
+              return;
+            }
+
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: prior.id,
+              body: commentBody,
+            });
+            core.info(`Updated existing kickoff comment ${prior.id}.`);
