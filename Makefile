@@ -35,7 +35,7 @@ TEST_PATH := tests
 
 .PHONY: install ## Installs all dependencies
 install: .env install-uv
-	$(RUN) pre-commit
+	uvx prek install -f
 
 .PHONY: install-uv ## Installs all dependencies via uv
 install-uv:
