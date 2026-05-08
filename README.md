@@ -1,4 +1,4 @@
-# disambiguate
+# Disambiguate
 
 <p align="center">
   <a href="https://github.com/frankify-app/disambiguate/actions/workflows/ci.yml?query=branch%3Amain">
