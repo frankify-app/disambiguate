@@ -19,4 +19,4 @@ jobs:
       - name: Install labels
         run: pip install labels
       - name: Sync config with Github
-        run: labels -u ${{ github.repository_owner }} -t ${{ secrets.GH_PAT }} sync -f .github/labels.toml
+        run: labels -u ${{ github.repository_owner }} -t ${{ secrets.LABELS_TOKEN }} sync -o ${{ github.repository_owner }} -r ${{ github.event.repository.name }} -f .github/labels.toml
