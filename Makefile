@@ -29,8 +29,12 @@ RUN_MODULE := $(PYTHON) -m
 SRC_PATH := src/disambiguate
 TEST_PATH := tests
 
+.env:
+	cp .env.example $@
+	@echo "Created .env from .env.example"
+
 .PHONY: install ## Installs all dependencies
-install: install-uv
+install: .env install-uv
 	$(RUN) pre-commit
 
 .PHONY: install-uv ## Installs all dependencies via uv
