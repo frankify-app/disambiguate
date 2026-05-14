@@ -1,6 +1,6 @@
 [build-system]
-build-backend = "setuptools.build_meta"
-requires = [ "setuptools>=77.0.3" ]
+build-backend = "hatchling.build"
+requires = [ "hatchling>=1.27" ]
 
 [project]
 name = "disambiguate"
@@ -14,52 +14,45 @@ license = "MIT"
 authors = [
   { name = "Frankify", email = "creator@frankify.app" },
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 classifiers = [
   "Development Status :: 2 - Pre-Alpha",
   "Intended Audience :: Developers",
   "Natural Language :: English",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3 :: Only",
-  "Programming Language :: Python :: 3.10",
-  "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: 3.13",
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries",
 ]
-dependencies = [
-  "colorama>=0.4.6,<0.5",
-  "pydantic-settings>=2.2.1,<3",
-  "python-dotenv>=1.0.1,<2",
-  "rich>=10",
-  "typer>=0.15,<1",
-]
+dependencies = []
 urls."Bug Tracker" = "https://github.com/frankify-app/disambiguate/issues"
 urls.Changelog = "https://github.com/frankify-app/disambiguate/blob/main/CHANGELOG.md"
 urls.documentation = "https://disambiguate.readthedocs.io"
 urls.repository = "https://github.com/frankify-app/disambiguate"
-scripts.disambiguate = "disambiguate.cli:app"
+scripts.disambiguate = "disambiguate.cli:main"
 
 [dependency-groups]
 dev = [
-  "black>=23.12.1,<24",
-  "coverage",
-  "isort>=5.13.2,<6",
+  "build>=1.2",
   "mypy>=1.8,<2",
   "pytest==9.*",
   "pytest-cov==7.*",
-  "ruff>=0.0.261,<0.1",
-  "sybil[pytest]",
-  "ty",
-  "types-colorama>=0.4.15.20240311,<1",
+  "python-semantic-release>=10",
+  "ruff>=0.6",
+  "typer>=0.23.1",
 ]
-docs = [
-  "furo; python_version>='3.12'",
-  "myst-parser; python_version>='3.12'",
-  "sphinx==9.*; python_version>='3.12'",
-  "sphinx-autobuild; python_version>='3.12'",
+
+[tool.hatch]
+build.hooks.custom.path = "hatch_build.py"
+build.targets.sdist.include = [
+  "src/disambiguate",
+  "docs/glossary",
+  "README.md",
+  "LICENSE",
 ]
+build.targets.wheel.packages = [ "src/disambiguate" ]
 
 [tool.ruff]
 line-length = 88
@@ -84,36 +77,36 @@ lint.ignore = [
   "D401", # First line of docstring should be in imperative mood
 ]
 lint.per-file-ignores."conftest.py" = [ "D100" ]
-lint.per-file-ignores."docs/conf.py" = [ "D100" ]
-lint.per-file-ignores."setup.py" = [ "D100" ]
+lint.per-file-ignores."hatch_build.py" = [ "D" ]
 lint.per-file-ignores."tests/**/*" = [
   "D100",
   "D101",
   "D102",
   "D103",
   "D104",
-  "S101",
+  "E501", # long lines OK in test data
+  "S101", # asserts are fine in tests
+  "S108", # /tmp Path placeholders never touch the filesystem
 ]
-lint.per-file-ignores."tests/test_dunder_main.py" = [ "S603" ]
+lint.per-file-ignores."tests/unit/test_dunder_main.py" = [ "S603" ]
 lint.isort.known-first-party = [ "tests" ]
 
 [tool.pyproject-fmt]
 max_supported_python = "3.14"
 
-[tool.ty]
-terminal.error-on-warning = true
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = [ "src", "tests", "dev_cli.py" ]
 
 [tool.pytest]
-minversion = "9.0"
-addopts = [
-  "-v",
+ini_options.minversion = "9.0"
+ini_options.addopts = [
   "-Wonce",
   "-p no:doctest",
-  "--cov=disambiguate",
-  "--cov-report=term",
-  "--cov-report=xml",
 ]
-pythonpath = [ "src" ]
+ini_options.pythonpath = [ "src" ]
+ini_options.testpaths = [ "tests" ]
 
 [tool.coverage]
 run.branch = true
@@ -132,16 +125,13 @@ report.exclude_lines = [
 [tool.semantic_release]
 allow_zero_version = true
 version_toml = [ "pyproject.toml:project.version" ]
-version_variables = [
-  "src/disambiguate/__init__.py:__version__",
-  "docs/conf.py:release",
-]
+version_variables = [ "src/disambiguate/__init__.py:__version__" ]
+commit_parser = "conventional"
 build_command = """
-pip install uv
-uv lock
-git add uv.lock
-uv build
+python -m pip install --upgrade build
+python -m build
 """
+upload_to_vcs_release = true
 branches.main.match = "main"
 branches.noop.match = "(?!main$)"
 branches.noop.prerelease = true

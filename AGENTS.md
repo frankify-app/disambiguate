@@ -6,7 +6,22 @@ Repo: https://github.com/frankify-app/disambiguate
 
 ### Terminology
 
-Ubiquitous language is defined in docs/glossary/.
+Ubiquitous language is defined in docs/glossary/. Use
+```
+uvx disambiguate <term>
+```
+to get a topologically ordered glossary disambiguating all relevant terms
+to understand the given term.
+
+Before working on a ticket, run:
+```
+uvx disambiguate --from <ticket-file>
+```
+or for GitHub issues:
+```
+gh issue view <number> --json body -q .body | uvx disambiguate --from -
+```
+to resolve all referenced terms at once.
 
 ### Architecture
 
