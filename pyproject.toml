@@ -4,7 +4,7 @@ requires = [ "hatchling>=1.27" ]
 
 [project]
 name = "disambiguate"
-version = "0.0.0"
+version = "0.1.0"
 description = """\
   A tool to resolve markdown glossary terms and their transitive dependencies in topological order in a GitHub project \
   or Obsidian vault.\
