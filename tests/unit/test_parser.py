@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from disambiguate.parser import ParsedTerm, parse_term_text
+from disambiguate.parser import (
+    ParsedTerm,
+    extract_md_link_paths_with_urls,
+    github_url_to_repo_path,
+    parse_term_text,
+)
 
 
 def test_parses_h2_heading() -> None:
@@ -99,3 +104,50 @@ def test_h2_with_extra_hashes_not_treated_as_h2() -> None:
     text = "### H3\n\nbody\n"
     parsed = parse_term_text("foo", text)
     assert parsed.canonical_name is None
+
+
+_REPO = "https://github.com/frankify-app/disambiguate"
+
+
+def test_extract_md_link_paths_with_urls_keeps_urls() -> None:
+    text = (
+        f"[a](a.md) [b]({_REPO}/blob/main/docs/glossary/b.md) "
+        "[c](https://example.com/c.md)\n"
+    )
+    assert extract_md_link_paths_with_urls(text) == [
+        "a.md",
+        f"{_REPO}/blob/main/docs/glossary/b.md",
+        "https://example.com/c.md",
+    ]
+
+
+def test_github_url_to_repo_path_blob() -> None:
+    url = f"{_REPO}/blob/main/docs/glossary/term.md"
+    assert github_url_to_repo_path(url, _REPO) == "docs/glossary/term.md"
+
+
+def test_github_url_to_repo_path_raw() -> None:
+    url = (
+        "https://raw.githubusercontent.com/frankify-app/disambiguate/"
+        "main/docs/glossary/term.md"
+    )
+    assert github_url_to_repo_path(url, _REPO) == "docs/glossary/term.md"
+
+
+def test_github_url_to_repo_path_strips_fragment() -> None:
+    url = f"{_REPO}/blob/main/docs/glossary/term.md#anchor"
+    assert github_url_to_repo_path(url, _REPO) == "docs/glossary/term.md"
+
+
+def test_github_url_to_repo_path_rejects_other_repo() -> None:
+    url = "https://github.com/other/proj/blob/main/x.md"
+    assert github_url_to_repo_path(url, _REPO) is None
+
+
+def test_github_url_to_repo_path_rejects_non_github_url() -> None:
+    assert github_url_to_repo_path("https://example.com/x.md", _REPO) is None
+
+
+def test_github_url_to_repo_path_accepts_repo_url_with_dot_git() -> None:
+    url = f"{_REPO}/blob/main/docs/x.md"
+    assert github_url_to_repo_path(url, _REPO + ".git") == "docs/x.md"

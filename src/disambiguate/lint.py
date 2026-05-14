@@ -19,7 +19,11 @@ from graphlib import TopologicalSorter
 from pathlib import Path
 
 from .glossary import Glossary
-from .parser import extract_md_link_paths, extract_wikilink_slugs
+from .parser import (
+    extract_md_link_paths_with_urls,
+    extract_wikilink_slugs,
+    github_url_to_repo_path,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -115,13 +119,19 @@ def _check_slug_format(glossary: Glossary) -> list[LintFinding]:
 def _walk_reachable(
     roots: Iterable[Path],
     glossary: Glossary,
+    repo_root: Path | None = None,
+    repo_url: str | None = None,
 ) -> set[Path]:
     """
     Return the set of `.md` file paths reachable from `roots` by link.
 
     Walks both glossary terms and external markdown documents. Cycles are
     handled by the visited-set check, not by topological sort. Non-`.md`
-    links and external URLs are ignored.
+    links are ignored. URLs are ignored unless `repo_url` is provided and
+    they point at a file inside that repository (a `<repo>/blob/<ref>/<path>`
+    or raw equivalent) — those resolve against `repo_root` exactly like
+    relative links, so the README on PyPI can use absolute GitHub URLs and
+    those links still count as internal cross-references.
     """
     visited: set[Path] = set()
     queue: list[Path] = []
@@ -146,7 +156,22 @@ def _walk_reachable(
             logger.warning("could not read %s during reachability walk: %s", current, e)
             continue
 
-        for raw_path in extract_md_link_paths(text):
+        for raw_path in extract_md_link_paths_with_urls(text):
+            if "://" in raw_path:
+                # URLs only count as internal references when they point at
+                # this repo's own GitHub blob/tree (or raw.githubusercontent)
+                # URL. Anything else is treated as a true external link and
+                # skipped.
+                if repo_url is None or repo_root is None:
+                    continue
+                repo_path = github_url_to_repo_path(raw_path, repo_url)
+                if repo_path is None:
+                    continue
+                target_path = (repo_root / repo_path).resolve()
+                if target_path.is_file() and target_path not in visited:
+                    queue.append(target_path)
+                continue
+
             target_path = (current.parent / raw_path).resolve()
             if target_path.is_file() and target_path not in visited:
                 queue.append(target_path)
@@ -169,9 +194,14 @@ def _walk_reachable(
     return visited
 
 
-def _check_orphans(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
+def _check_orphans(
+    glossary: Glossary,
+    roots: list[Path],
+    repo_root: Path | None = None,
+    repo_url: str | None = None,
+) -> list[LintFinding]:
     """Return one finding listing every term not reachable from `roots`."""
-    visited = _walk_reachable(roots, glossary)
+    visited = _walk_reachable(roots, glossary, repo_root=repo_root, repo_url=repo_url)
     orphan_slugs = sorted(
         slug
         for slug, term in glossary.terms.items()
@@ -192,13 +222,24 @@ def _check_orphans(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
     return [LintFinding(kind="orphan", message=message)]
 
 
-def lint_glossary(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
+def lint_glossary(
+    glossary: Glossary,
+    roots: list[Path],
+    repo_root: Path | None = None,
+    repo_url: str | None = None,
+) -> list[LintFinding]:
     """
     Run every lint check against `glossary` and return the combined findings.
 
     glossary: loaded glossary.
     roots: documents from which reachability is measured. Caller is
         responsible for resolving the roots (flag, env, default).
+    repo_root: directory used to resolve in-repo GitHub URLs to local files
+        during reachability. When None, GitHub URLs are skipped.
+    repo_url: the canonical repository URL (e.g.
+        `https://github.com/owner/name`). When supplied alongside
+        `repo_root`, absolute links to this repo on github.com count as
+        internal references during the orphan walk.
 
     Returns
     -------
@@ -211,5 +252,7 @@ def lint_glossary(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
     findings.extend(_check_broken_links(glossary))
     findings.extend(_check_missing_h2(glossary))
     findings.extend(_check_slug_format(glossary))
-    findings.extend(_check_orphans(glossary, roots))
+    findings.extend(
+        _check_orphans(glossary, roots, repo_root=repo_root, repo_url=repo_url)
+    )
     return findings

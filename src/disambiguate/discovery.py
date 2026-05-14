@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import glob as _glob
 import logging
+import tomllib
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -108,6 +109,31 @@ def resolve_default_root(start: Path) -> list[Path]:
     if not readme.is_file():
         raise RootFileMissingError(f"Default root README.md not found at {readme}")
     return [readme]
+
+
+def find_repo_url(repo_root: Path) -> str | None:
+    """
+    Return the canonical repository URL declared in `pyproject.toml`, or None.
+
+    repo_root: directory containing `pyproject.toml`.
+
+    Returns
+    -------
+    The string at `project.urls.repository` if present and a parseable URL,
+    else None. Used by the orphan walker to recognize absolute links into
+    this repo's own GitHub blob/tree URLs as internal cross-references.
+
+    """
+    pyproject = repo_root / "pyproject.toml"
+    if not pyproject.is_file():
+        return None
+    with pyproject.open("rb") as fh:
+        data = tomllib.load(fh)
+    urls = data.get("project", {}).get("urls", {})
+    repo_url = urls.get("repository")
+    if isinstance(repo_url, str) and repo_url:
+        return repo_url
+    return None
 
 
 def expand_root_specs(specs: list[str]) -> list[Path]:

@@ -105,6 +105,77 @@ def extract_md_link_paths(text: str) -> list[str]:
     ]
 
 
+def extract_md_link_paths_with_urls(text: str) -> list[str]:
+    """
+    Return every `.md` link target verbatim, in document order.
+
+    Unlike `extract_md_link_paths`, URL targets are kept. Callers that walk
+    file reachability use this together with `github_url_to_repo_path` so
+    that links to the project's own GitHub repository count as internal
+    references (the README on PyPI must use absolute URLs to render, but
+    those URLs still point at files inside the repo).
+
+    Code blocks and inline code spans are excluded.
+    """
+    code_stripped = _strip_code(text)
+    return [match.group(1) for match in _MD_LINK_RE.finditer(code_stripped)]
+
+
+# A GitHub blob or raw URL pointing at a file inside a specific repo. Group
+# `path` is the in-repo path with the leading ref stripped. Examples that
+# match (with repo_url=https://github.com/frankify-app/disambiguate):
+#   https://github.com/frankify-app/disambiguate/blob/main/docs/x.md
+#   https://raw.githubusercontent.com/frankify-app/disambiguate/main/docs/x.md
+_GITHUB_REPO_URL_RE = re.compile(
+    r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)"
+    r"/(?:blob|tree|raw)/[^/]+/(?P<path>.+)$"
+)
+_GITHUB_RAW_URL_RE = re.compile(
+    r"^https://raw\.githubusercontent\.com/(?P<owner>[^/]+)/(?P<repo>[^/]+)"
+    r"/[^/]+/(?P<path>.+)$"
+)
+_REPO_URL_RE = re.compile(
+    r"^https://github\.com/(?P<owner>[^/]+)/(?P<repo>[^/#?]+?)(?:\.git)?/?$"
+)
+
+
+def github_url_to_repo_path(url: str, repo_url: str) -> str | None:
+    """
+    Map a GitHub URL to a repo-relative path, or None if it doesn't apply.
+
+    url: the link target as it appears in markdown.
+    repo_url: this repository's canonical URL, e.g.
+        `https://github.com/frankify-app/disambiguate`.
+
+    Returns
+    -------
+    The in-repo path (e.g. `docs/glossary/term.md`) when `url` points at a
+    file inside `repo_url`. Returns None for any URL that doesn't match the
+    `<repo>/blob/<ref>/<path>`, `<repo>/tree/<ref>/<path>`, or
+    raw.githubusercontent.com equivalent, or that targets a different repo.
+
+    """
+    repo_match = _REPO_URL_RE.match(repo_url)
+    if repo_match is None:
+        return None
+    expected_owner = repo_match.group("owner")
+    expected_repo = repo_match.group("repo")
+
+    for regex in (_GITHUB_REPO_URL_RE, _GITHUB_RAW_URL_RE):
+        match = regex.match(url)
+        if match is None:
+            continue
+        if match.group("owner") != expected_owner:
+            continue
+        if match.group("repo") != expected_repo:
+            continue
+        # Strip a trailing fragment/query; only the path portion is a file.
+        path = match.group("path")
+        path = path.split("#", 1)[0].split("?", 1)[0]
+        return path
+    return None
+
+
 def extract_wikilink_slugs(text: str) -> list[str]:
     """
     Return the slugs of every wiki-style `[[slug]]` link in document order.

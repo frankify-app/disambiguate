@@ -35,10 +35,10 @@
 
 Disambiguate resolves markdown glossary terms and their transitive
 dependencies in topological order. Point it at a directory of `*.md` term
-files in either [GitHub format](docs/glossary/github-format.md) or
-[Obsidian format](docs/glossary/obsidian-format.md), ask for a slug or two,
-and get back a self-contained markdown document where every term is
-defined before it is referenced.
+files in either [GitHub format](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/github-format.md)
+or [Obsidian format](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/obsidian-format.md),
+ask for a slug or two, and get back a self-contained markdown document
+where every term is defined before it is referenced.
 
 ## Quickstart
 
@@ -61,19 +61,24 @@ pip install disambiguate
 
 ## How it works
 
-The pipeline parses each [term](docs/glossary/term.md) into a body plus a
-list of [cross-references](docs/glossary/cross-reference.md), builds a
-[dependency](docs/glossary/dependency.md) graph from those references, then
-runs the [resolver](docs/glossary/resolver.md) to produce
-[topological order](docs/glossary/topological-order.md). The same pipeline
-backs [from-mode](docs/glossary/from-mode.md) and `--explain`.
+The pipeline parses each [term](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/term.md)
+into a body plus a list of [cross-references](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/cross-reference.md),
+builds a [dependency](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/dependency.md)
+graph from those references, then runs the
+[resolver](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/resolver.md)
+to produce [topological order](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/topological-order.md).
+The same pipeline backs
+[from-mode](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/from-mode.md)
+and `--explain`.
 
-For the architectural map, see [docs/architecture.md](docs/architecture.md).
+For the architectural map, see
+[docs/architecture.md](https://github.com/frankify-app/disambiguate/blob/main/docs/architecture.md).
 For the full vocabulary, see the
-[bundled glossary](docs/glossary/disambiguate.md) — Disambiguate's own
-dogfood.
+[bundled glossary](https://github.com/frankify-app/disambiguate/blob/main/docs/glossary/disambiguate.md)
+— Disambiguate's own dogfood.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md). Conventional commits required —
-the release workflow uses them to compute the next version.
+See [CONTRIBUTING.md](https://github.com/frankify-app/disambiguate/blob/main/CONTRIBUTING.md).
+Conventional commits required — the release workflow uses them to compute
+the next version.

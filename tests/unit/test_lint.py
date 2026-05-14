@@ -199,6 +199,69 @@ def test_lint_orphan_message_includes_override_hint(tmp_path: Path) -> None:
     assert "DISAMBIGUATE_ROOTS" in orphan.message
 
 
+_REPO_URL = "https://github.com/frankify-app/disambiguate"
+
+
+def test_lint_treats_repo_github_blob_url_as_internal(tmp_path: Path) -> None:
+    glossary_dir = tmp_path / "docs" / "glossary"
+    glossary_dir.mkdir(parents=True)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text(
+        f"[term]({_REPO_URL}/blob/main/docs/glossary/term.md)\n",
+        encoding="utf-8",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(
+        glossary, roots=[root], repo_root=tmp_path, repo_url=_REPO_URL
+    )
+    assert not any(f.kind == "orphan" for f in findings)
+
+
+def test_lint_treats_raw_githubusercontent_url_as_internal(tmp_path: Path) -> None:
+    glossary_dir = tmp_path / "docs" / "glossary"
+    glossary_dir.mkdir(parents=True)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    root = tmp_path / "README.md"
+    raw = "https://raw.githubusercontent.com/frankify-app/disambiguate/main"
+    root.write_text(f"[term]({raw}/docs/glossary/term.md)\n", encoding="utf-8")
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(
+        glossary, roots=[root], repo_root=tmp_path, repo_url=_REPO_URL
+    )
+    assert not any(f.kind == "orphan" for f in findings)
+
+
+def test_lint_ignores_github_url_for_different_repo(tmp_path: Path) -> None:
+    glossary_dir = tmp_path / "docs" / "glossary"
+    glossary_dir.mkdir(parents=True)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text(
+        "[t](https://github.com/other/proj/blob/main/docs/glossary/term.md)\n",
+        encoding="utf-8",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(
+        glossary, roots=[root], repo_root=tmp_path, repo_url=_REPO_URL
+    )
+    assert any(f.kind == "orphan" and "term" in f.message for f in findings)
+
+
+def test_lint_without_repo_url_skips_github_urls(tmp_path: Path) -> None:
+    glossary_dir = tmp_path / "docs" / "glossary"
+    glossary_dir.mkdir(parents=True)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text(
+        f"[term]({_REPO_URL}/blob/main/docs/glossary/term.md)\n",
+        encoding="utf-8",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(glossary, roots=[root])
+    assert any(f.kind == "orphan" and "term" in f.message for f in findings)
+
+
 def test_finding_has_kind_and_message() -> None:
     finding = LintFinding(kind="cycle", message="x")
     assert finding.kind == "cycle"

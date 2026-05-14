@@ -27,6 +27,8 @@ from .discovery import (
     RootFileMissingError,
     expand_root_specs,
     find_glossary,
+    find_repo_root,
+    find_repo_url,
     resolve_default_root,
 )
 from .from_mode import BrokenFromLinkError, extract_slugs
@@ -203,7 +205,14 @@ def _normalize_requested_slugs(slugs: list[str]) -> list[str]:
 
 def _run_lint(glossary: Glossary, roots: list[Path]) -> int:
     """Run lint and report findings to stderr; return exit code."""
-    findings = lint_glossary(glossary, roots=roots)
+    try:
+        repo_root: Path | None = find_repo_root(start=Path.cwd())
+    except RepoRootNotFoundError:
+        repo_root = None
+    repo_url = find_repo_url(repo_root) if repo_root is not None else None
+    findings = lint_glossary(
+        glossary, roots=roots, repo_root=repo_root, repo_url=repo_url
+    )
     if not findings:
         return EXIT_OK
     for finding in findings:
