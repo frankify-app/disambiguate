@@ -17,15 +17,21 @@ jobs:
       id-token: write
 
     steps:
+      # Mint an installation token for the release bot GitHub App. The app
+      # identity authors the version-bump commit/tag and is allow-listed in
+      # branch protection so it can push to `main`. Trade-off: pushes from
+      # this token do retrigger the workflow on `main`, but the follow-up run
+      # finds no releasable commits and exits as a no-op.
+      - uses: actions/create-github-app-token@v3.2.0
+        id: app-token
+        with:
+          app-id: ${{ vars.RELEASE_BOT_APP_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
       - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
-          # python-semantic-release pushes the version-bump commit. Without
-          # a non-default token, that push triggers another workflow run on
-          # the same branch (and concurrency: release blocks rather than
-          # quietly skipping). Use the GITHUB_TOKEN — pushes from it do not
-          # retrigger this workflow on `main`, which is the behaviour we want.
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: actions/setup-python@v6.2.0
         with:
@@ -39,7 +45,7 @@ jobs:
         id: release
         uses: python-semantic-release/python-semantic-release@v10.5.3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
+          github_token: ${{ steps.app-token.outputs.token }}
 
       - name: Publish distributions to PyPI
         if: steps.release.outputs.released == 'true'
