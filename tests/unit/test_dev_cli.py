@@ -6,10 +6,12 @@ import subprocess
 import sys
 import tarfile
 import zipfile
+from importlib.metadata import version
 from pathlib import Path
 from shutil import which
 
 ROOT = Path(__file__).resolve().parents[2]
+PKG_VERSION = version("disambiguate")
 
 
 def _uv_executable() -> str:
@@ -62,10 +64,13 @@ def test_dev_cli_is_not_in_built_distributions() -> None:
         cwd=ROOT,
     )
 
-    with zipfile.ZipFile(ROOT / "dist/disambiguate-0.0.0-py3-none-any.whl") as wheel:
+    wheel_path = ROOT / f"dist/disambiguate-{PKG_VERSION}-py3-none-any.whl"
+    sdist_path = ROOT / f"dist/disambiguate-{PKG_VERSION}.tar.gz"
+
+    with zipfile.ZipFile(wheel_path) as wheel:
         assert "dev_cli.py" not in wheel.namelist()
 
-    with tarfile.open(ROOT / "dist/disambiguate-0.0.0.tar.gz") as sdist:
-        assert "disambiguate-0.0.0/dev_cli.py" not in {
+    with tarfile.open(sdist_path) as sdist:
+        assert f"disambiguate-{PKG_VERSION}/dev_cli.py" not in {
             member.name for member in sdist.getmembers()
         }
