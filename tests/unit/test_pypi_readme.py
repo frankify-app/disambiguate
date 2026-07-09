@@ -102,3 +102,8 @@ def test_absolute_markdown_link_is_untouched() -> None:
 def test_anchor_link_is_untouched() -> None:
     text = "Jump to [usage](#usage)."
     assert _apply_substitutions(text) == text
+
+
+def test_mailto_link_is_untouched() -> None:
+    text = "Contact [us](mailto:creator@frankify.app)."
+    assert _apply_substitutions(text) == text
