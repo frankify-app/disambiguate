@@ -1,6 +1,8 @@
 [build-system]
 build-backend = "hatchling.build"
-requires = [ "hatchling>=1.27" ]
+# DECISION:ARCH — hatch-fancy-pypi-readme is a build-time-only dependency;
+# the installed package stays stdlib-only (project.dependencies is empty).
+requires = [ "hatch-fancy-pypi-readme>=24.1", "hatchling>=1.27" ]
 
 [project]
 name = "disambiguate"
@@ -9,7 +11,6 @@ description = """\
   A tool to resolve markdown glossary terms and their transitive dependencies in topological order in a GitHub project \
   or Obsidian vault.\
   """
-readme = "README.md"
 license = "MIT"
 authors = [
   { name = "Frankify", email = "creator@frankify.app" },
@@ -26,6 +27,10 @@ classifiers = [
   "Programming Language :: Python :: 3.14",
   "Topic :: Software Development :: Libraries",
 ]
+# DECISION:ARCH — readme is dynamic: the checked-in README.md keeps relative
+# links (editors, GitHub, lint root); hatch-fancy-pypi-readme rewrites them to
+# absolute GitHub URLs in the built package metadata so they work on PyPI (#15).
+dynamic = [ "readme" ]
 dependencies = []
 urls."Bug Tracker" = "https://github.com/frankify-app/disambiguate/issues"
 urls.Changelog = "https://github.com/frankify-app/disambiguate/blob/main/CHANGELOG.md"
@@ -53,6 +58,13 @@ build.targets.sdist.include = [
   "LICENSE",
 ]
 build.targets.wheel.packages = [ "src/disambiguate" ]
+metadata.hooks.fancy-pypi-readme.content-type = "text/markdown"
+metadata.hooks.fancy-pypi-readme.fragments = [ { path = "README.md" } ]
+# Rewrite relative markdown link targets to absolute GitHub URLs; targets that
+# are already absolute (https?://) or in-page anchors (#) are left untouched.
+metadata.hooks.fancy-pypi-readme.substitutions = [
+  { pattern = "\\[([^\\]]+)\\]\\((?!https?://|#)([^)]+)\\)", replacement = "[\\1](https://github.com/frankify-app/disambiguate/blob/main/\\2)" },
+]
 
 [tool.ruff]
 line-length = 88
