@@ -11,7 +11,7 @@ Checks:
 - **Broken cross-references**: a [cross-reference](cross-reference.md) whose
   basename does not match any term in the glossary.
 - **Duplicate slugs**: two term files sharing a basename.
-- **Missing H2 heading**: a term file with no `## ` heading on any line. The
+- **Missing H2 heading**: a term file with no H2 (`##`) heading on any line. The
   H2 is the canonical name; without it the term has no identity.
 - **Invalid slug format**: a [slug](slug.md) that does not match the canonical
   format `^[a-z0-9]+(?:-[a-z0-9]+)*$` — lowercase letters, digits, and single

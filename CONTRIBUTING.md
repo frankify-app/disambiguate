@@ -34,7 +34,7 @@ The best way to send feedback [our issue page][gh-issues] on GitHub. If you are 
 - Keep the scope as narrow as possible, to make it easier to implement.
 - Remember that this is a volunteer-driven project, and that contributions are welcome 😊
 
-## Get Started!
+## Get Started
 
 Ready to contribute? Here's how to set yourself up for local development.
 
@@ -43,19 +43,19 @@ Ready to contribute? Here's how to set yourself up for local development.
 2. Clone your fork locally:
 
    ```shell
-   $ git clone git@github.com:your_name_here/disambiguate.git
+   git clone git@github.com:your_name_here/disambiguate.git
    ```
 
 3. Install the project dependencies with [uv](https://docs.astral.sh/uv/):
 
    ```shell
-   $ uv sync
+   uv sync
    ```
 
 4. Create a branch for local development:
 
    ```shell
-   $ git checkout -b name-of-your-bugfix-or-feature
+   git checkout -b name-of-your-bugfix-or-feature
    ```
 
    Now you can make your changes locally.
@@ -63,27 +63,27 @@ Ready to contribute? Here's how to set yourself up for local development.
 5. When you're done making changes, check that your changes pass our tests:
 
    ```shell
-   $ uv run pytest
+   uv run pytest
    ```
 
 6. Linting is done through [prek](https://prek.j178.dev/). Provided you have the tool installed globally, you can run them all as one-off:
 
    ```shell
-   $ prek run -a
+   prek run -a
    ```
 
    Or better, install the hooks once and have them run automatically each time you commit:
 
    ```shell
-   $ prek install -f
+   prek install -f
    ```
 
 7. Commit your changes and push your branch to GitHub:
 
    ```shell
-   $ git add .
-   $ git commit -m "feat(something): your detailed description of your changes"
-   $ git push origin name-of-your-bugfix-or-feature
+   git add .
+   git commit -m "feat(something): your detailed description of your changes"
+   git push origin name-of-your-bugfix-or-feature
    ```
 
    Note: the commit message should follow [the conventional commits](https://www.conventionalcommits.org). We run [`commitlint` on CI](https://github.com/marketplace/actions/commit-linter) to validate it, and if you've installed prek hooks at the previous step, the message will be checked at commit time.
@@ -91,7 +91,7 @@ Ready to contribute? Here's how to set yourself up for local development.
 8. Submit a pull request through the GitHub website or using the GitHub CLI (if you have it installed):
 
    ```shell
-   $ gh pr create --fill
+   gh pr create --fill
    ```
 
 ## Pull Request Guidelines
@@ -107,7 +107,7 @@ We like to have the pull request open as soon as possible, that's a great place 
 To run a subset of tests:
 
 ```shell
-$ pytest tests
+pytest tests
 ```
 
 ## Making a new release
