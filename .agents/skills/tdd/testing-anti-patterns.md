@@ -12,7 +12,7 @@ Tests must verify real behavior, not mock behavior. Mocks are a means to isolate
 
 ## The Iron Laws
 
-```
+```text
 1. NEVER test mock behavior
 2. NEVER add test-only methods to production classes
 3. NEVER mock without understanding dependencies
@@ -51,9 +51,9 @@ test('renders sidebar', () => {
 // Don't assert on the mock - test Page's behavior with sidebar present
 ```
 
-### Gate Function
+### Gate Function: Mock Behavior
 
-```
+```text
 BEFORE asserting on any mock element:
   Ask: "Am I testing real component behavior or just mock existence?"
 
@@ -70,8 +70,7 @@ BEFORE asserting on any mock element:
 ```typescript
 // ❌ BAD: destroy() only used in tests
 class Session {
-  async destroy() {
-    // Looks like production API!
+  async destroy() {  // Looks like production API!
     await this._workspaceManager?.destroyWorkspace(this.id);
     // ... cleanup
   }
@@ -106,9 +105,9 @@ export async function cleanupSession(session: Session) {
 afterEach(() => cleanupSession(session));
 ```
 
-### Gate Function
+### Gate Function: Test-Only Methods
 
-```
+```text
 BEFORE adding any method to production class:
   Ask: "Is this only used by tests?"
 
@@ -128,14 +127,14 @@ BEFORE adding any method to production class:
 
 ```typescript
 // ❌ BAD: Mock breaks test logic
-test("detects duplicate server", () => {
+test('detects duplicate server', () => {
   // Mock prevents config write that test depends on!
-  vi.mock("ToolCatalog", () => ({
-    discoverAndCacheTools: vi.fn().mockResolvedValue(undefined),
+  vi.mock('ToolCatalog', () => ({
+    discoverAndCacheTools: vi.fn().mockResolvedValue(undefined)
   }));
 
   await addServer(config);
-  await addServer(config); // Should throw - but won't!
+  await addServer(config);  // Should throw - but won't!
 });
 ```
 
@@ -149,18 +148,18 @@ test("detects duplicate server", () => {
 
 ```typescript
 // ✅ GOOD: Mock at correct level
-test("detects duplicate server", () => {
+test('detects duplicate server', () => {
   // Mock the slow part, preserve behavior test needs
-  vi.mock("MCPServerManager"); // Just mock slow server startup
+  vi.mock('MCPServerManager'); // Just mock slow server startup
 
-  await addServer(config); // Config written
-  await addServer(config); // Duplicate detected ✓
+  await addServer(config);  // Config written
+  await addServer(config);  // Duplicate detected ✓
 });
 ```
 
-### Gate Function
+### Gate Function: Mocking Dependencies
 
-```
+```text
 BEFORE mocking any method:
   STOP - Don't mock yet
 
@@ -191,8 +190,8 @@ BEFORE mocking any method:
 ```typescript
 // ❌ BAD: Partial mock - only fields you think you need
 const mockResponse = {
-  status: "success",
-  data: { userId: "123", name: "Alice" },
+  status: 'success',
+  data: { userId: '123', name: 'Alice' }
   // Missing: metadata that downstream code uses
 };
 
@@ -213,16 +212,16 @@ const mockResponse = {
 ```typescript
 // ✅ GOOD: Mirror real API completeness
 const mockResponse = {
-  status: "success",
-  data: { userId: "123", name: "Alice" },
-  metadata: { requestId: "req-789", timestamp: 1234567890 },
+  status: 'success',
+  data: { userId: '123', name: 'Alice' },
+  metadata: { requestId: 'req-789', timestamp: 1234567890 }
   // All fields real API returns
 };
 ```
 
-### Gate Function
+### Gate Function: Incomplete Mocks
 
-```
+```text
 BEFORE creating mock responses:
   Check: "What fields does the real API response contain?"
 
@@ -242,7 +241,7 @@ BEFORE creating mock responses:
 
 **The violation:**
 
-```
+```text
 ✅ Implementation complete
 ❌ No tests written
 "Ready for testing"
@@ -256,7 +255,7 @@ BEFORE creating mock responses:
 
 **The fix:**
 
-```
+```text
 TDD cycle:
 1. Write failing test
 2. Implement to pass
@@ -290,14 +289,14 @@ TDD cycle:
 
 ## Quick Reference
 
-| Anti-Pattern                    | Fix                                           |
-| ------------------------------- | --------------------------------------------- |
-| Assert on mock elements         | Test real component or unmock it              |
-| Test-only methods in production | Move to test utilities                        |
-| Mock without understanding      | Understand dependencies first, mock minimally |
-| Incomplete mocks                | Mirror real API completely                    |
-| Tests as afterthought           | TDD - tests first                             |
-| Over-complex mocks              | Consider integration tests                    |
+| Anti-Pattern | Fix |
+| --- | --- |
+| Assert on mock elements | Test real component or unmock it |
+| Test-only methods in production | Move to test utilities |
+| Mock without understanding | Understand dependencies first, mock minimally |
+| Incomplete mocks | Mirror real API completely |
+| Tests as afterthought | TDD - tests first |
+| Over-complex mocks | Consider integration tests |
 
 ## Red Flags
 

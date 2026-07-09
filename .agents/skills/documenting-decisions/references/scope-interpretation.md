@@ -1,4 +1,4 @@
-## Scope interpretation
+# Scope interpretation
 
 When a task is ambiguous, do not silently pick an interpretation. Instead:
 

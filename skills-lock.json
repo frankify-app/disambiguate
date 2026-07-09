@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "skills": {
+    "caveman": {
+      "source": "frankify-app/skills",
+      "sourceType": "github",
+      "skillPath": "derived/caveman/SKILL.md",
+      "computedHash": "30b52226790cba1d0ab173e16af901002d43e76bc02ca47d47ec67be76984e83"
+    },
+    "documenting-decisions": {
+      "source": "frankify-app/skills",
+      "sourceType": "github",
+      "skillPath": "original/documenting-decisions/SKILL.md",
+      "computedHash": "6de79ad3f21409d7215bb8fb6013357fd53b46054091faf3dddb7d3573b2b157"
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "sourceType": "github",
+      "skillPath": "skills/requesting-code-review/SKILL.md",
+      "computedHash": "cde520e9118d7e6b74b5ab0123cff2f68d9c07bddb3f82c997753b6126600aed"
+    },
+    "tdd": {
+      "source": "frankify-app/skills",
+      "sourceType": "github",
+      "skillPath": "derived/tdd/SKILL.md",
+      "computedHash": "b663ec89bd4d0babc7572eb39ce21fe56a95c6da9d74149a17ce93b7c4906253"
+    }
+  }
+}

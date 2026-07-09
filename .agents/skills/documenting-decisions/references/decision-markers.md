@@ -1,4 +1,4 @@
-## Decision markers
+# Decision markers
 
 When making a noteworthy decision during implementation, annotate it inline in the code:
 

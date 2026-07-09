@@ -26,7 +26,7 @@ See this skill's `references/` `decision-markers.md` and (if needed) `marker-exa
 
 Generate decision log from markers in changed files and add to PR description:
 
-```
+```markdown
 ## Decisions requiring review
 - **TAG** `file:line` — explanation
 ## Routine (skip review)

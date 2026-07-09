@@ -1,4 +1,4 @@
-## Security protocol
+# Security protocol
 
 Never auto-commit changes to these paths without human review:
 

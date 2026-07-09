@@ -1,0 +1,4 @@
+# Glossary entries start with `##` per the Disambiguate definition,
+# so the first-line-h1 rule does not apply here.
+config:
+  MD041: false

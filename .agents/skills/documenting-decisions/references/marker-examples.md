@@ -2,7 +2,7 @@
 
 ## Format
 
-```
+```text
 // DECISION:<TAG> — <explanation>
 ```
 

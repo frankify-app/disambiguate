@@ -1,0 +1,15 @@
+# https://yamllint.readthedocs.io/
+extends: default
+
+rules:
+  # Config/CI YAML uses long URLs and pinned action SHAs; matches the
+  # MD013 (line-length) opt-out applied to the Markdown docs.
+  line-length: disable
+  # Allow both `true/false` and other truthy spellings without complaint.
+  truthy:
+    check-keys: false
+  # The repo's YAML omits the `---` document marker by convention.
+  document-start: disable
+  # Existing configs use single-space inline comments (`# ...`).
+  comments:
+    min-spaces-from-content: 1
