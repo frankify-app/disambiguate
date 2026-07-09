@@ -61,9 +61,10 @@ build.targets.wheel.packages = [ "src/disambiguate" ]
 metadata.hooks.fancy-pypi-readme.content-type = "text/markdown"
 metadata.hooks.fancy-pypi-readme.fragments = [ { path = "README.md" } ]
 # Rewrite relative markdown link targets to absolute GitHub URLs; targets that
-# are already absolute (https?://) or in-page anchors (#) are left untouched.
+# already carry a URI scheme (https://, mailto:, ...) or are in-page anchors (#)
+# are left untouched.
 metadata.hooks.fancy-pypi-readme.substitutions = [
-  { pattern = "\\[([^\\]]+)\\]\\((?!https?://|#)([^)]+)\\)", replacement = "[\\1](https://github.com/frankify-app/disambiguate/blob/main/\\2)" },
+  { pattern = "\\[([^\\]]+)\\]\\((?![a-zA-Z][a-zA-Z0-9+.-]*:|#)([^)]+)\\)", replacement = "[\\1](https://github.com/frankify-app/disambiguate/blob/main/\\2)" },
 ]
 
 [tool.ruff]
