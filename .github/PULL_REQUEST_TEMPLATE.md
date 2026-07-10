@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD041 -->
 <!--
   😀 Wonderful!  Thank you for opening a pull request.
 

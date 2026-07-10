@@ -1,0 +1,18 @@
+# https://github.com/DavidAnson/markdownlint-cli2
+config:
+  default: true
+  MD013: false # line-length — agent docs use long URLs and table rows
+
+globs:
+  - "**/*.md"
+  - "**/*.markdown"
+
+# Skip git-ignored paths (e.g. _input/, _references/) since the hook now globs
+# instead of receiving the tracked-file list from prek.
+gitignore: true
+
+ignores:
+  - CHANGELOG.md
+  - .copier-answers.agentic.yml
+  - .all-contributorsrc
+  - .agents/skills/**

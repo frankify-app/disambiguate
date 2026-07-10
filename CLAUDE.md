@@ -2,11 +2,11 @@
 
 **First:** Read `AGENTS.md`. Follow all instructions and skills there.
 
-### Pull Requests
+## Pull Requests
 
 Share PR URL in response to user. Run CI poll after push, confirm green before reporting done.
 
-### CI Polling (`scripts/ci_poll.py`)
+## CI Polling (`scripts/ci_poll.py`)
 
 Uses exponential backoff (15s → 60s cap).
 

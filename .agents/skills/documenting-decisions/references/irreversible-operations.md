@@ -1,4 +1,4 @@
-## Irreversible operations
+# Irreversible operations
 
 Never execute these without explicit human approval:
 

@@ -5,7 +5,7 @@ touching code.
 
 ## Module layout
 
-```
+```text
 src/disambiguate/
 ├── __init__.py
 ├── __main__.py              # python -m disambiguate

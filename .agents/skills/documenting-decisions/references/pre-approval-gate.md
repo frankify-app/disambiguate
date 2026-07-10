@@ -1,4 +1,4 @@
-## Pre-approval gate
+# Pre-approval gate
 
 Before writing implementation code, produce a PLAN.md with:
 
