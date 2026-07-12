@@ -146,10 +146,15 @@ commit_parser = "conventional"
 # turns main red, blocking all future releases (see #21). build_command runs
 # after the version is written but before the release commit; `assets` adds
 # the refreshed lockfile to that commit.
+# The command runs inside the python-semantic-release Docker action, where the
+# runner's setup-uv does not apply — pip-install uv here. `set -e` because the
+# 0.1.2 release shipped a stale lockfile when `uv: command not found` was
+# swallowed and the build carried on (#23).
 assets = [ "uv.lock" ]
 build_command = """
+set -e
+python -m pip install --upgrade build uv
 uv lock
-python -m pip install --upgrade build
 python -m build
 """
 upload_to_vcs_release = true
