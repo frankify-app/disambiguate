@@ -60,6 +60,17 @@ Live in `.agents/skills/`. Synced using `npx skills update -p -y` — don't edit
 | `documenting-decisions`  | Any implementation task — place `DECISION:` markers                                                |
 | `requesting-code-review` | After completing implementation                                                                    |
 | `caveman`                | Compact wording when writing prose (issues description, PR description, comments on repo or code)  |
+| `grill-me`               | User asks to be grilled/interviewed about a plan or design before implementation                   |
+| `grill-with-docs`        | Grilling session that also records ADRs and glossary entries as decisions are made                 |
+| `grilling`               | Core interview loop used by `grill-me`/`grill-with-docs`; also on any 'grill' trigger phrase       |
+| `domain-modeling`        | Pinning down domain terminology (glossary in `docs/glossary/`) or recording decisions in design    |
+| `writing-adrs`           | Recording an architectural decision as an ADR in `docs/adr/`, or when another skill flags one      |
+| `to-tickets`             | Splitting approved work into tracer-bullet issues with blocking edges (reproducible-spec rules)    |
+| `to-spec`                | Turning the current conversation into a spec/PRD and publishing it to the tracker                  |
+
+### Repo-Local Skill Overrides
+
+- `grilling`: present each question via the platform's multiple-choice dialog (e.g. `AskUserQuestion` in Claude Code) when the platform supports one; fall back to plain-text questions otherwise.
 
 ## Git
 
@@ -71,15 +82,15 @@ Live in `.agents/skills/`. Synced using `npx skills update -p -y` — don't edit
 
 ### Agentic Engineering Workflow
 
-Use `ghx` for all repository interaction. `gh` and `tea` are disabled — calling them tells you to use `ghx` instead.
-
-`ghx` exposes a curated subset of `gh`'s verbs (plus a few additions, e.g. `--code-comment`) and presents the **same `gh`-style interface against both GitHub and Forgejo**, so you never need to know which host the repo is on. It is **not** a full `gh` replacement: it has only the verbs listed below. If a command isn't in this list, `ghx` doesn't have it — don't fall back to `gh`/`tea`.
+Use `ghx` for all repository interaction. `gh` and `tea` are disabled — calling them tells you to use `ghx` instead (enforced via shims in `scripts/agent-shims/`, on PATH in agent sessions only; tracker access through MCP tools is not gated by the shims).
 
 #### Available `ghx` verbs
 
 - **issues:** `issue create`, `issue view` (`--comments`), `issue list`, `issue comment`, `issue edit`
 - **pull requests:** `pr create`, `pr view` (`--comments`), `pr list`, `pr comment`, `pr edit`, `pr review` (`--body`, repeatable `--code-comment path:line:text`), `pr checks`, `pr status`
 - **CI:** `run list`, `run view`
+
+`ghx` exposes a curated subset of `gh`'s verbs (plus a few additions, e.g. `--code-comment`) and presents the **same `gh`-style interface against both GitHub and Forgejo**, so you never need to know which host the repo is on. It is **not** a full `gh` replacement: it has only the verbs listed above. If a command isn't in that list, `ghx` doesn't have it — don't fall back to `gh`/`tea`.
 
 Use `run list` / `run view` for workflow-run detail; use `pr checks` / `pr status` for a PR's check rollup.
 

@@ -127,6 +127,7 @@ done
 
 warn_tool ghx "not installed (deferred; agents use ghx for repo interaction)"
 
+
 echo
 echo "Summary: $pass ok, $fail required missing"
 
