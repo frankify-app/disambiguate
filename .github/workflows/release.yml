@@ -36,15 +36,37 @@ jobs:
           client-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
           private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
 
-      # `workflow_run`'s default checkout points at the workflow file's
-      # branch (the repo default), not the commit that triggered CI.
-      # Pin to the CI run's head SHA so semantic-release evaluates the
-      # exact commit whose CI just turned green.
+      # Check out the `main` branch, NOT the CI run's head SHA: a bare-SHA
+      # checkout leaves the repo in detached HEAD state, and
+      # python-semantic-release matches release groups by branch name, so a
+      # detached HEAD always no-ops ("Detached HEAD state cannot match any
+      # release groups"). See #19.
       - uses: actions/checkout@v6.0.2
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: main
           token: ${{ steps.app-token.outputs.token }}
+
+      # Only release when the commit whose CI just turned green is still the
+      # head of `main`. If `main` has moved on, skip: the newer commit's own
+      # CI run will trigger its own release, and releasing here would tag a
+      # commit that never went green.
+      # DECISION:SCOPE guard-and-skip instead of `git checkout -B main
+      # <head_sha>`: forcing the branch onto the CI'd SHA would release a
+      # commit that is no longer main's tip, and the version-bump push would
+      # then conflict with the real `main`.
+      - name: Ensure `main` still points at the CI'd commit
+        id: guard
+        env:
+          CI_HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          head="$(git rev-parse HEAD)"
+          if [ "${head}" = "${CI_HEAD_SHA}" ]; then
+            echo "release=true" >> "${GITHUB_OUTPUT}"
+          else
+            echo "main is at ${head}, but CI ran for ${CI_HEAD_SHA}; skipping release"
+            echo "release=false" >> "${GITHUB_OUTPUT}"
+          fi
 
       - uses: actions/setup-python@v6.2.0
         with:
@@ -55,6 +77,7 @@ jobs:
           python-version: "3.12"
 
       - name: Run python-semantic-release
+        if: steps.guard.outputs.release == 'true'
         id: release
         uses: python-semantic-release/python-semantic-release@v10.5.3
         with:
