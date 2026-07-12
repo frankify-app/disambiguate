@@ -75,6 +75,10 @@ jobs:
       - uses: astral-sh/setup-uv@v8.1.0
         with:
           python-version: "3.12"
+          # On no-op runs (bump commit, nothing to release) uv is never
+          # invoked on the runner, so the post-job cache step would error
+          # with "Cache path ... does not exist" and fail the job (#25).
+          ignore-nothing-to-cache: true
 
       - name: Run python-semantic-release
         if: steps.guard.outputs.release == 'true'
