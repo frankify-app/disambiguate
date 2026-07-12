@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Agent-PATH shim: this CLI is not the chosen tracker CLI for this repo.
+# On PATH only inside agent sessions (see .claude/settings.json); the
+# user's shell is untouched.
+echo "ghx: disabled — use gh (see AGENTS.md)" >&2
+exit 1
