@@ -125,7 +125,6 @@ for tool in "${REQUIRED_TOOLS[@]}"; do
     fi
 done
 
-warn_tool ghx "not installed (deferred; agents use ghx for repo interaction)"
 
 
 echo

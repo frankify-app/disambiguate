@@ -24,7 +24,7 @@ uvx disambiguate --from <ticket-file>
 or for GitHub issues:
 
 ```bash
-ghx issue view <number> --json body -q .body | uvx disambiguate --from -
+gh issue view <number> --json body -q .body | uvx disambiguate --from -
 ```
 
 to resolve all referenced terms at once.
@@ -82,15 +82,13 @@ Live in `.agents/skills/`. Synced using `npx skills update -p -y` — don't edit
 
 ### Agentic Engineering Workflow
 
-Use `ghx` for all repository interaction. `gh` and `tea` are disabled — calling them tells you to use `ghx` instead (enforced via shims in `scripts/agent-shims/`, on PATH in agent sessions only; tracker access through MCP tools is not gated by the shims).
+Use `gh` for all repository interaction. `ghx` and `tea` are disabled — calling them tells you to use `gh` instead (enforced via shims in `scripts/agent-shims/`, on PATH in agent sessions only; tracker access through MCP tools is not gated by the shims).
 
-#### Available `ghx` verbs
+#### Available `gh` verbs
 
 - **issues:** `issue create`, `issue view` (`--comments`), `issue list`, `issue comment`, `issue edit`
 - **pull requests:** `pr create`, `pr view` (`--comments`), `pr list`, `pr comment`, `pr edit`, `pr review` (`--body`, repeatable `--code-comment path:line:text`), `pr checks`, `pr status`
 - **CI:** `run list`, `run view`
-
-`ghx` exposes a curated subset of `gh`'s verbs (plus a few additions, e.g. `--code-comment`) and presents the **same `gh`-style interface against both GitHub and Forgejo**, so you never need to know which host the repo is on. It is **not** a full `gh` replacement: it has only the verbs listed above. If a command isn't in that list, `ghx` doesn't have it — don't fall back to `gh`/`tea`.
 
 Use `run list` / `run view` for workflow-run detail; use `pr checks` / `pr status` for a PR's check rollup.
 
@@ -99,12 +97,12 @@ The modes below are the kinds of work the user will ask for. **Each runs in its 
 #### Plan
 
 - Explore the codebase. Flag `DECISION:SCOPE` when resolving ambiguities. Use the `documenting-decisions` skill (refs: `pre-approval-gate.md`, `scope-interpretation.md`).
-- Write an issue → `ghx issue create`
-- Set issue metadata → `ghx issue edit` (labels/assignees/milestone)
+- Write an issue → `gh issue create`
+- Set issue metadata → `gh issue edit` (labels/assignees/milestone)
 
 #### Implement
 
-- Read the given issue and comments → `ghx issue view --comments`
+- Read the given issue and comments → `gh issue view --comments`
 - Do Test-Driven Development per the `tdd` skill.
 - Implement the minimal code to pass tests, then the remaining code per the ticket spec. Place `DECISION:` markers per the `documenting-decisions` skill (refs: `decision-markers.md`, `marker-examples.md`).
 - Commit discipline:
@@ -112,30 +110,30 @@ The modes below are the kinds of work the user will ask for. **Each runs in its 
   - `prek` must pass on every commit (lint/format hooks only — prek never runs unit tests).
   - TDD red-step commits are expected and required (a commit whose new tests fail but whose lint/format passes). **CI evaluates at PR HEAD, not per-commit**, so a red-step commit does not constitute a CI failure — do not treat it as one.
   - Don't fix lint manually — run the formatter. Only touch code directly if the tools can't resolve it.
-- Push → `git push` *(plain git; git is not routed through `ghx`)*
-- Create the PR if not already present, and link it to the issue both ways → `ghx pr create` (start with `Closes #<number>` in description), then `ghx issue edit` if a back-reference is needed. **If a PR already exists for this branch, do not create or re-link it** — skip to CI.
+- Push → `git push` *(plain git; git is not routed through `gh`)*
+- Create the PR if not already present, and link it to the issue both ways → `gh pr create` (start with `Closes #<number>` in description), then `gh issue edit` if a back-reference is needed. **If a PR already exists for this branch, do not create or re-link it** — skip to CI.
   PR body must include:
   - `Closes #<number>`.
   - Any obstacles that diverged from the initial plan, and — in the rare event spec deviation was unavoidable — what deviated and why.
   - All `DECISION:` markers present in the diff, rendered per the `documenting-decisions` skill format.
-- Check CI → `ghx run list` / `ghx run view` (or `ghx pr checks` once the PR exists).
+- Check CI → `gh run list` / `gh run view` (or `gh pr checks` once the PR exists).
 - If CI fails, fix it by re-entering this **Implement** workflow.
 
 #### Review
 
-- Read the given issue and comments → `ghx issue view --comments`
+- Read the given issue and comments → `gh issue view --comments`
 - Review the PR and give Critical / Important feedback per the `requesting-code-review` skill.
-- Submit it as a single review → `ghx pr review`:
+- Submit it as a single review → `gh pr review`:
   - PR-level summary feedback → `--body "..."`
   - Feedback tied to specific lines → repeatable `--code-comment path:line:text`
-  - Put both in the same `ghx pr review` call; don't split a review across `pr review` and `pr comment`.
+  - Put both in the same `gh pr review` call; don't split a review across `pr review` and `pr comment`.
 
 #### Apply Review Comments
 
-- Read the given issue and comments → `ghx issue view --comments`
-- Read PR comments and code comments → `ghx pr view --comments`
-- If the review uncovers inconsistencies in the issue, **comment** on it freely → `ghx issue comment`
-- Only **edit** issue content when the user explicitly requests it → `ghx issue edit`. Editing is gated on explicit request because it can overwrite human-authored intent; commenting is always safe, editing is not.
+- Read the given issue and comments → `gh issue view --comments`
+- Read PR comments and code comments → `gh pr view --comments`
+- If the review uncovers inconsistencies in the issue, **comment** on it freely → `gh issue comment`
+- Only **edit** issue content when the user explicitly requests it → `gh issue edit`. Editing is gated on explicit request because it can overwrite human-authored intent; commenting is always safe, editing is not.
 - Then re-enter the **Implement** workflow.
 
 ## Commands
