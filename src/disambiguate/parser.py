@@ -53,8 +53,9 @@ _H2_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$", re.MULTILINE)
 # Standard markdown link to an .md file: [text](path/to/foo.md)
 _MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+\.md)(?:\s+\"[^\"]*\")?\)")
 
-# Wikilink: [[slug]] (no spaces inside the slug, conservative)
-_WIKILINK_RE = re.compile(r"\[\[([^\[\]|\s]+)\]\]")
+# Wikilink: [[slug]] or [[slug|display text]] (no spaces inside the slug,
+# conservative; display text is resolver-irrelevant and may contain spaces)
+_WIKILINK_RE = re.compile(r"\[\[([^\[\]|\s]+)(?:\|[^\[\]|]+)?\]\]")
 
 
 def _strip_code(text: str) -> str:

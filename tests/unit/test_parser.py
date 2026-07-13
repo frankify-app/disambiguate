@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from disambiguate.parser import ParsedTerm, parse_term_text
 
 
@@ -97,7 +95,6 @@ def test_body_includes_full_text() -> None:
     assert parsed.body == text
 
 
-@pytest.mark.xfail(strict=True)
 def test_wikilink_with_display_text_resolves_to_slug() -> None:
     text = "## Foo\n\nSee [[bar|the bar thing]].\n"
     parsed = parse_term_text("foo", text)
