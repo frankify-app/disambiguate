@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from disambiguate.parser import ParsedTerm, parse_term_text
 
 
@@ -93,6 +95,13 @@ def test_body_includes_full_text() -> None:
     text = "## Foo\n\nFirst para.\n\nSecond para.\n"
     parsed = parse_term_text("foo", text)
     assert parsed.body == text
+
+
+@pytest.mark.xfail(strict=True)
+def test_wikilink_with_display_text_resolves_to_slug() -> None:
+    text = "## Foo\n\nSee [[bar|the bar thing]].\n"
+    parsed = parse_term_text("foo", text)
+    assert parsed.link_slugs == ["bar"]
 
 
 def test_h2_with_extra_hashes_not_treated_as_h2() -> None:
