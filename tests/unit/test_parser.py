@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from disambiguate.parser import ParsedTerm, parse_term_text
 
 
@@ -105,6 +107,13 @@ def test_malformed_pipe_wikilinks_resolve_on_first_segment() -> None:
     # Obsidian-lenient: everything after the first pipe is display text,
     # even when empty or containing further pipes. Empty target = no link.
     text = "## Foo\n\n[[bar|]] and [[baz|b|c]] and [[|only display]].\n"
+    parsed = parse_term_text("foo", text)
+    assert parsed.link_slugs == ["bar", "baz"]
+
+
+@pytest.mark.xfail(strict=True)
+def test_wikilink_fragment_targets_resolve_to_slug() -> None:
+    text = "## Foo\n\n[[bar#My Heading]] and [[baz#^block-id|shown text]].\n"
     parsed = parse_term_text("foo", text)
     assert parsed.link_slugs == ["bar", "baz"]
 
