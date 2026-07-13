@@ -50,8 +50,11 @@ _INLINE_CODE_RE = re.compile(r"(?P<ticks>`+)(?!`).*?(?P=ticks)")
 
 _H2_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$", re.MULTILINE)
 
-# Standard markdown link to an .md file: [text](path/to/foo.md)
-_MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+\.md)(?:\s+\"[^\"]*\")?\)")
+# Standard markdown link to an .md file: [text](path/to/foo.md), with an
+# optional #fragment after the path — the fragment is stripped, only the
+# path is captured. `#` is excluded from path characters so the greedy path
+# match can never swallow a fragment that itself ends in `.md`.
+_MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s#]+\.md)(?:#[^)\s]*)?(?:\s+\"[^\"]*\")?\)")
 
 # Wikilink: [[slug]], [[slug|display text]], [[slug#fragment]], or any
 # combination (no spaces inside the slug, conservative). A `#fragment`
