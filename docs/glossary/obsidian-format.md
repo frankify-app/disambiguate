@@ -8,6 +8,13 @@ through Obsidian.
 `[[slug]]`. Obsidian renders these as live, clickable backlinks and shows
 them in the graph view, which is the main reason to choose this variant.
 
+Display text is supported: `[[slug|display text]]` resolves to `slug`; the
+text after the pipe is presentation-only and the link renders verbatim.
+Heading and block targets (`[[slug#heading]]`, `[[slug#^block]]`) also
+resolve to `slug` — the fragment is ignored. Malformed pipe forms
+(`[[|text]]`, `[[slug|]]`, `[[a|b|c]]`) fail [lint](lint.md) in glossary
+files, though rendering stays lenient and resolves the first segment.
+
 Standard markdown links (`[label](other.md)`) also work for the resolver
 and render correctly in Obsidian, but lose the backlink and graph view
 benefits. Use wiki-style links by preference; fall back to markdown links
