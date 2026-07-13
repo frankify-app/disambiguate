@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.glossary import load_glossary
 from disambiguate.lint import LintFinding, lint_glossary
 
@@ -62,7 +60,6 @@ def test_lint_detects_missing_h2(tmp_path: Path) -> None:
     assert any(f.kind == "missing-h2" for f in findings)
 
 
-@pytest.mark.xfail(strict=True)
 def test_lint_detects_malformed_pipe_wikilinks_in_term_files(tmp_path: Path) -> None:
     glossary_dir = _setup_glossary(tmp_path)
     _write(glossary_dir, "term", "## Term\n\nbody\n")

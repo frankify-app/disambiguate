@@ -65,6 +65,11 @@ _MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s#]+\.md)(?:#[^)\s]*)?(?:\s+\"[^\"]*
 # empty target ([[|text]]) never matches. Lint flags malformed pipe forms.
 _WIKILINK_RE = re.compile(r"\[\[([^\[\]|\s#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
 
+# Any bracketed [[...]] span containing a pipe, well-formed or not. Used to
+# detect malformed pipe forms for lint; validation happens in code, not in
+# the regex.
+_PIPED_WIKILINK_RE = re.compile(r"\[\[([^\[\]]*\|[^\[\]]*)\]\]")
+
 
 def _strip_code(text: str) -> str:
     """
@@ -122,6 +127,26 @@ def extract_wikilink_slugs(text: str) -> list[str]:
     """
     code_stripped = _strip_code(text)
     return [match.group(1) for match in _WIKILINK_RE.finditer(code_stripped)]
+
+
+def extract_malformed_wikilinks(text: str) -> list[str]:
+    """
+    Return the raw text of every malformed piped wikilink, in document order.
+
+    A piped wikilink is malformed when its target (before the first pipe,
+    fragment stripped) is empty, its display text is empty, or it contains
+    more than one pipe. Such links still resolve leniently on their first
+    segment (Obsidian semantics); this function only reports them so lint
+    can flag sloppy authoring. Code blocks and inline code spans are excluded.
+    """
+    code_stripped = _strip_code(text)
+    malformed: list[str] = []
+    for match in _PIPED_WIKILINK_RE.finditer(code_stripped):
+        target, *display = match.group(1).split("|")
+        target = target.split("#", 1)[0]
+        if target == "" or len(display) != 1 or display[0] == "":
+            malformed.append(match.group(0))
+    return malformed
 
 
 def extract_all_link_slugs(text: str) -> list[str]:

@@ -1,8 +1,9 @@
 """
-Lint a glossary against six fatal-on-violation checks.
+Lint a glossary against seven fatal-on-violation checks.
 
 The checks: cycles, broken cross-references, duplicate slugs, missing H2
-headings, invalid slug format, and reachability orphans. Duplicate slugs are
+headings, invalid slug format, malformed piped wikilinks (glossary term
+files only), and reachability orphans. Duplicate slugs are
 caught by the loader and surface as a `DuplicateSlugError`; the other five
 are reported as `LintFinding` objects so the CLI can present all problems
 at once instead of stopping on the first.
@@ -19,7 +20,11 @@ from graphlib import TopologicalSorter
 from pathlib import Path
 
 from .glossary import Glossary
-from .parser import extract_md_link_paths, extract_wikilink_slugs
+from .parser import (
+    extract_malformed_wikilinks,
+    extract_md_link_paths,
+    extract_wikilink_slugs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +39,8 @@ class LintFinding:
     A single lint violation.
 
     kind: one of "cycle", "broken-link", "missing-h2", "invalid-slug",
-        "orphan". "duplicate-slug" is raised at load time and never
-        reaches a finding.
+        "malformed-wikilink", "orphan". "duplicate-slug" is raised at load
+        time and never reaches a finding.
     message: human-readable description, used directly in error output.
     """
 
@@ -109,6 +114,30 @@ def _check_slug_format(glossary: Glossary) -> list[LintFinding]:
                 ),
             )
         )
+    return findings
+
+
+def _check_malformed_wikilinks(glossary: Glossary) -> list[LintFinding]:
+    """
+    Return one finding per malformed piped wikilink in glossary term files.
+
+    Only term files are checked — external documents visited by the
+    reachability walk are not Disambiguate's to police.
+    """
+    findings: list[LintFinding] = []
+    for slug in sorted(glossary.terms):
+        term = glossary.terms[slug]
+        for raw_link in extract_malformed_wikilinks(term.body):
+            findings.append(
+                LintFinding(
+                    kind="malformed-wikilink",
+                    message=(
+                        f"{slug}: malformed piped wikilink {raw_link} in "
+                        f"{term.path} (expected [[slug|display text]] with "
+                        f"non-empty slug and display text, single pipe)"
+                    ),
+                )
+            )
     return findings
 
 
@@ -203,7 +232,8 @@ def lint_glossary(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
     Returns
     -------
     A list of LintFinding objects; empty list means clean. Order is
-    deterministic: cycles, broken-links, missing-h2, invalid-slug, orphans.
+    deterministic: cycles, broken-links, missing-h2, invalid-slug,
+    malformed-wikilink, orphans.
 
     """
     findings: list[LintFinding] = []
@@ -211,5 +241,6 @@ def lint_glossary(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
     findings.extend(_check_broken_links(glossary))
     findings.extend(_check_missing_h2(glossary))
     findings.extend(_check_slug_format(glossary))
+    findings.extend(_check_malformed_wikilinks(glossary))
     findings.extend(_check_orphans(glossary, roots))
     return findings
