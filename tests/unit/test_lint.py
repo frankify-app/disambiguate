@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.glossary import load_glossary
 from disambiguate.lint import LintFinding, lint_glossary
 
@@ -58,6 +60,37 @@ def test_lint_detects_missing_h2(tmp_path: Path) -> None:
     glossary = load_glossary(glossary_dir)
     findings = lint_glossary(glossary, roots=[root])
     assert any(f.kind == "missing-h2" for f in findings)
+
+
+@pytest.mark.xfail(strict=True)
+def test_lint_detects_malformed_pipe_wikilinks_in_term_files(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    _write(
+        glossary_dir,
+        "a",
+        "## A\n\n[[term|]] and [[term|x|y]] and [[|just text]]\n",
+    )
+    root = tmp_path / "README.md"
+    root.write_text("[a](glossary/a.md) [t](glossary/term.md)\n", encoding="utf-8")
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(glossary, roots=[root])
+    malformed = [f for f in findings if f.kind == "malformed-wikilink"]
+    assert len(malformed) == 3
+    assert all("a" in f.message for f in malformed)
+    assert any("[[term|]]" in f.message for f in malformed)
+    assert any("[[term|x|y]]" in f.message for f in malformed)
+    assert any("[[|just text]]" in f.message for f in malformed)
+
+
+def test_lint_ignores_malformed_wikilinks_in_external_docs(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text("[[term|]] and [t](glossary/term.md)\n", encoding="utf-8")
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(glossary, roots=[root])
+    assert findings == []
 
 
 def test_lint_detects_invalid_slug_uppercase(tmp_path: Path) -> None:
