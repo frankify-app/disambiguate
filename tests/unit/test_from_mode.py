@@ -81,3 +81,15 @@ def test_ignores_links_in_code_blocks() -> None:
     text = "```\n[ghost](ghost.md)\n[[ghost]]\n```\n[a](a.md)\n"
     slugs = extract_slugs(text, _glossary("a"))
     assert slugs == ["a"]
+
+
+def test_extracts_display_text_and_fragment_links() -> None:
+    text = "[[a|shown text]] then [detail](b.md#section) then [[c#Heading|x]]"
+    slugs = extract_slugs(text, _glossary("a", "b", "c"))
+    assert slugs == ["a", "b", "c"]
+
+
+def test_broken_slug_behind_display_text_fails() -> None:
+    text = "[[ghost|friendly name]]"
+    with pytest.raises(BrokenFromLinkError, match="ghost"):
+        extract_slugs(text, _glossary("a"))

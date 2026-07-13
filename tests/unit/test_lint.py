@@ -233,3 +233,13 @@ def test_finding_has_kind_and_message() -> None:
     finding = LintFinding(kind="cycle", message="x")
     assert finding.kind == "cycle"
     assert finding.message == "x"
+
+
+def test_lint_reachability_through_display_text_wikilink(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "a", "## A\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text("[[a|the A term]]\n", encoding="utf-8")
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(glossary, roots=[root])
+    assert not any(f.kind == "orphan" for f in findings)
