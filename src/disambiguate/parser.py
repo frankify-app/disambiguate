@@ -53,12 +53,14 @@ _H2_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$", re.MULTILINE)
 # Standard markdown link to an .md file: [text](path/to/foo.md)
 _MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+\.md)(?:\s+\"[^\"]*\")?\)")
 
-# Wikilink: [[slug]] or [[slug|display text]] (no spaces inside the slug,
-# conservative). Everything after the first pipe is display text — Obsidian
+# Wikilink: [[slug]], [[slug|display text]], [[slug#fragment]], or any
+# combination (no spaces inside the slug, conservative). A `#fragment`
+# (heading or ^block target, spaces allowed) is stripped — only the slug
+# resolves. Everything after the first pipe is display text — Obsidian
 # treats it as resolver-irrelevant even when empty or containing more pipes,
 # so the lenient tail `[^\[\]]*` matches [[slug|]] and [[a|b|c]] too. An
 # empty target ([[|text]]) never matches. Lint flags malformed pipe forms.
-_WIKILINK_RE = re.compile(r"\[\[([^\[\]|\s]+)(?:\|[^\[\]]*)?\]\]")
+_WIKILINK_RE = re.compile(r"\[\[([^\[\]|\s#]+)(?:#[^\[\]|]*)?(?:\|[^\[\]]*)?\]\]")
 
 
 def _strip_code(text: str) -> str:
