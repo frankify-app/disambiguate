@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from disambiguate.parser import ParsedTerm, parse_term_text
 
 
@@ -99,6 +101,15 @@ def test_wikilink_with_display_text_resolves_to_slug() -> None:
     text = "## Foo\n\nSee [[bar|the bar thing]].\n"
     parsed = parse_term_text("foo", text)
     assert parsed.link_slugs == ["bar"]
+
+
+@pytest.mark.xfail(strict=True)
+def test_malformed_pipe_wikilinks_resolve_on_first_segment() -> None:
+    # Obsidian-lenient: everything after the first pipe is display text,
+    # even when empty or containing further pipes. Empty target = no link.
+    text = "## Foo\n\n[[bar|]] and [[baz|b|c]] and [[|only display]].\n"
+    parsed = parse_term_text("foo", text)
+    assert parsed.link_slugs == ["bar", "baz"]
 
 
 def test_h2_with_extra_hashes_not_treated_as_h2() -> None:
