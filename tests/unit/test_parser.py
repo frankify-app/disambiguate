@@ -95,6 +95,32 @@ def test_body_includes_full_text() -> None:
     assert parsed.body == text
 
 
+def test_wikilink_with_display_text_resolves_to_slug() -> None:
+    text = "## Foo\n\nSee [[bar|the bar thing]].\n"
+    parsed = parse_term_text("foo", text)
+    assert parsed.link_slugs == ["bar"]
+
+
+def test_malformed_pipe_wikilinks_resolve_on_first_segment() -> None:
+    # Obsidian-lenient: everything after the first pipe is display text,
+    # even when empty or containing further pipes. Empty target = no link.
+    text = "## Foo\n\n[[bar|]] and [[baz|b|c]] and [[|only display]].\n"
+    parsed = parse_term_text("foo", text)
+    assert parsed.link_slugs == ["bar", "baz"]
+
+
+def test_wikilink_fragment_targets_resolve_to_slug() -> None:
+    text = "## Foo\n\n[[bar#My Heading]] and [[baz#^block-id|shown text]].\n"
+    parsed = parse_term_text("foo", text)
+    assert parsed.link_slugs == ["bar", "baz"]
+
+
+def test_markdown_link_fragment_resolves_to_slug() -> None:
+    text = "## Foo\n\nSee [detail](bar.md#some-section) and [b](sub/baz.md#x).\n"
+    parsed = parse_term_text("foo", text)
+    assert parsed.link_slugs == ["bar", "baz"]
+
+
 def test_h2_with_extra_hashes_not_treated_as_h2() -> None:
     text = "### H3\n\nbody\n"
     parsed = parse_term_text("foo", text)

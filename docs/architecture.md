@@ -96,6 +96,13 @@ resolves by [basename](glossary/basename-resolution.md), regardless of
 directory components or whether the link uses standard markdown
 (`[t](path/to/foo.md)`) or wiki-style (`[[foo]]`).
 
+Wiki-style links may carry display text (`[[foo|shown text]]`) and either
+syntax may carry a `#fragment` (`[[foo#heading]]`, `[t](foo.md#section)`);
+the display text and fragment are stripped, only the slug resolves.
+Malformed pipe forms resolve leniently on the first segment
+(Obsidian semantics), but [lint](glossary/lint.md) reports them as fatal
+in glossary term files.
+
 The parser ignores links inside fenced code blocks (```` ``` ```` or `~~~`)
 and inline code spans (single backticks). URLs (anything containing `://`)
 are also ignored. Non-`.md` links and image references are not parsed at all.

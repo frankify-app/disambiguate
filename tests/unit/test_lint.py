@@ -60,6 +60,36 @@ def test_lint_detects_missing_h2(tmp_path: Path) -> None:
     assert any(f.kind == "missing-h2" for f in findings)
 
 
+def test_lint_detects_malformed_pipe_wikilinks_in_term_files(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    _write(
+        glossary_dir,
+        "a",
+        "## A\n\n[[term|]] and [[term|x|y]] and [[|just text]]\n",
+    )
+    root = tmp_path / "README.md"
+    root.write_text("[a](glossary/a.md) [t](glossary/term.md)\n", encoding="utf-8")
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(glossary, roots=[root])
+    malformed = [f for f in findings if f.kind == "malformed-wikilink"]
+    assert len(malformed) == 3
+    assert all("a" in f.message for f in malformed)
+    assert any("[[term|]]" in f.message for f in malformed)
+    assert any("[[term|x|y]]" in f.message for f in malformed)
+    assert any("[[|just text]]" in f.message for f in malformed)
+
+
+def test_lint_ignores_malformed_wikilinks_in_external_docs(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "term", "## Term\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text("[[term|]] and [t](glossary/term.md)\n", encoding="utf-8")
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(glossary, roots=[root])
+    assert findings == []
+
+
 def test_lint_detects_invalid_slug_uppercase(tmp_path: Path) -> None:
     glossary_dir = _setup_glossary(tmp_path)
     _write(glossary_dir, "MyTerm", "## My Term\n\n")
@@ -203,3 +233,13 @@ def test_finding_has_kind_and_message() -> None:
     finding = LintFinding(kind="cycle", message="x")
     assert finding.kind == "cycle"
     assert finding.message == "x"
+
+
+def test_lint_reachability_through_display_text_wikilink(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "a", "## A\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text("[[a|the A term]]\n", encoding="utf-8")
+    glossary = load_glossary(glossary_dir)
+    findings = lint_glossary(glossary, roots=[root])
+    assert not any(f.kind == "orphan" for f in findings)
