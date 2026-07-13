@@ -54,8 +54,11 @@ _H2_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$", re.MULTILINE)
 _MD_LINK_RE = re.compile(r"\[[^\]]*\]\(([^)\s]+\.md)(?:\s+\"[^\"]*\")?\)")
 
 # Wikilink: [[slug]] or [[slug|display text]] (no spaces inside the slug,
-# conservative; display text is resolver-irrelevant and may contain spaces)
-_WIKILINK_RE = re.compile(r"\[\[([^\[\]|\s]+)(?:\|[^\[\]|]+)?\]\]")
+# conservative). Everything after the first pipe is display text — Obsidian
+# treats it as resolver-irrelevant even when empty or containing more pipes,
+# so the lenient tail `[^\[\]]*` matches [[slug|]] and [[a|b|c]] too. An
+# empty target ([[|text]]) never matches. Lint flags malformed pipe forms.
+_WIKILINK_RE = re.compile(r"\[\[([^\[\]|\s]+)(?:\|[^\[\]]*)?\]\]")
 
 
 def _strip_code(text: str) -> str:
