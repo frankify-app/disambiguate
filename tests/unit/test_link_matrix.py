@@ -260,7 +260,6 @@ def test_empty_alias_is_flagged_malformed_but_still_resolves(
     assert _orphan_slugs(findings) == set()
 
 
-@pytest.mark.xfail(strict=True)
 def test_docs_and_matrix_in_lockstep() -> None:
     """
     Issue #29 meta-test: the cross-reference spec and this matrix stay in lockstep.
