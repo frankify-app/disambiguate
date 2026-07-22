@@ -20,6 +20,7 @@ src/disambiguate/
 ├── lint.py                  # all lint checks including reachability
 ├── mentions.py              # find term-mentions in prose (masked matching)
 ├── suppressions.py          # ignore-hints, config ignores, stale detection
+├── baseline.py              # checked-in drift-baseline (grandfathering)
 └── drift.py                 # drift-check engine behind --drift
 ```
 
@@ -90,9 +91,13 @@ Discover → load → walk the corpus reachable from the lint roots → run the
 by [ignore-hints](glossary/ignore-hint.md) at config, file, or inline
 scope — parsing, precedence, and stale-suppression detection live in
 [suppressions.py](../src/disambiguate/suppressions.py). Findings go to
-stderr with their [rule-code](glossary/rule-code.md); exit code 1 if any. Drift-checks
-are deliberately separate from `--lint`: lint validates the glossary,
-drift validates the prose that uses it.
+stderr with their [rule-code](glossary/rule-code.md); exit code 1 if any.
+Findings recorded in the checked-in
+[drift-baseline](glossary/drift-baseline.md)
+([baseline.py](../src/disambiguate/baseline.py)) are non-fatal and
+auto-pruned once fixed; `--drift --write-baseline` regenerates the file.
+Drift-checks are deliberately separate from `--lint`: lint validates the
+glossary, drift validates the prose that uses it.
 
 ## Glossary auto-discovery
 
