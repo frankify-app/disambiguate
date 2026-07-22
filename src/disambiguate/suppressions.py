@@ -100,12 +100,12 @@ class DriftConfig:
         for pattern, rules in self.ignore_paths.items():
             if rule_code not in rules:
                 continue
-            if _glob_covers(pattern, path, self.root):
+            if glob_covers(pattern, path, self.root):
                 return True
         return False
 
 
-def _glob_covers(pattern: str, path: Path, root: Path | None) -> bool:
+def glob_covers(pattern: str, path: Path, root: Path | None) -> bool:
     """Match `path` against a config glob relative to `root` (or absolute)."""
     if root is not None:
         try:
