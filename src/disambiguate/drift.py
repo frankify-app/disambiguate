@@ -17,7 +17,11 @@ from .glossary import Glossary, Term
 from .lint import walk_reachable
 from .mentions import find_mentions
 from .parser import extract_all_link_slugs
-from .suppressions import inline_hint_covers, parse_inline_hints
+from .suppressions import (
+    inline_hint_covers,
+    parse_file_hints,
+    parse_inline_hints,
+)
 
 
 @dataclass(frozen=True)
@@ -117,10 +121,16 @@ def _apply_suppressions(
     findings: list[DriftFinding], corpus: dict[Path, str]
 ) -> list[DriftFinding]:
     """Drop findings covered by an ignore-hint in their own document."""
-    hints_by_path = {path: parse_inline_hints(text) for path, text in corpus.items()}
+    inline_by_path = {path: parse_inline_hints(text) for path, text in corpus.items()}
+    file_rules_by_path = {
+        path: {hint.rule_code for hint in parse_file_hints(text)}
+        for path, text in corpus.items()
+    }
     kept: list[DriftFinding] = []
     for finding in findings:
-        hints = hints_by_path.get(finding.path, [])
+        if finding.rule_code in file_rules_by_path.get(finding.path, set()):
+            continue
+        hints = inline_by_path.get(finding.path, [])
         if any(
             inline_hint_covers(hint, finding.rule_code, finding.line, finding.term)
             for hint in hints
