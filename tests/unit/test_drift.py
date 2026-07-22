@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -418,7 +416,6 @@ def test_wrong_alias_participates_in_baseline(tmp_path: Path) -> None:
     assert stale_keys == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_common_noun_title_cased_mid_sentence_is_term_case_drift(
     tmp_path: Path,
 ) -> None:
@@ -445,7 +442,6 @@ def test_sentence_initial_capital_is_not_term_case_drift(tmp_path: Path) -> None
     assert [f for f in findings if f.rule_code == "term-case"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_proper_noun_lowercased_mid_sentence_is_term_case_drift(
     tmp_path: Path,
 ) -> None:
