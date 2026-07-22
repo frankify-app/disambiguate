@@ -21,6 +21,10 @@ from .parser import _FENCED_CODE_RE, _INLINE_CODE_RE
 _MD_LINK_SPAN_RE = re.compile(r"!?\[[^\]]*\]\([^)]*\)")
 _WIKILINK_SPAN_RE = re.compile(r"!?\[\[[^\]]*\]\]")
 
+# HTML comments carry ignore-hints (which name the very terms they
+# silence) and are invisible in rendered markdown — never a term-mention.
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.DOTALL)
+
 
 @dataclass(frozen=True)
 class Mention:
@@ -67,6 +71,7 @@ def masked_spans(text: str) -> list[tuple[int, int]]:
         _INLINE_CODE_RE,
         _MD_LINK_SPAN_RE,
         _WIKILINK_SPAN_RE,
+        _HTML_COMMENT_RE,
     ):
         for match in pattern.finditer(text):
             spans.append((match.start(), match.end()))
