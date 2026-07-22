@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -414,3 +416,69 @@ def test_wrong_alias_participates_in_baseline(tmp_path: Path) -> None:
     fresh, stale_keys = apply_baseline(findings, baseline)
     assert fresh == []
     assert stale_keys == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_common_noun_title_cased_mid_sentence_is_term_case_drift(
+    tmp_path: Path,
+) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). Then the Widget spins.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    case = [f for f in findings if f.rule_code == "term-case"]
+    assert len(case) == 1
+    assert case[0].term == "widget"
+    assert "Widget" in case[0].message
+
+
+def test_sentence_initial_capital_is_not_term_case_drift(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). Widget spins here.\n"
+        "Widget also starts this line.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "term-case"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_proper_noun_lowercased_mid_sentence_is_term_case_drift(
+    tmp_path: Path,
+) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "github", "## GitHub\n\nThe forge.\n")
+    root = _write(
+        tmp_path,
+        "README",
+        "See [GitHub](glossary/github.md). Hosted on github today.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    case = [f for f in findings if f.rule_code == "term-case"]
+    assert len(case) == 1
+    assert case[0].term == "github"
+
+
+def test_correct_casing_produces_no_term_case_finding(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). Then the widget spins.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "term-case"] == []
+
+
+def test_term_case_skips_code_and_links(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). Run `the Widget` and read\n"
+        "the [Widget guide](https://example.com).\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "term-case"] == []
