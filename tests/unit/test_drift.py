@@ -116,3 +116,43 @@ def test_mention_inside_wikilink_display_text_is_not_drift(tmp_path: Path) -> No
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+def test_matching_is_case_insensitive(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    root = _write(tmp_path, "README", "[w](glossary/widget.md) [g](guide.md)\n")
+    _write(tmp_path, "guide", "The WIDGET spins.\n")
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f.term for f in findings if f.rule_code == "unlinked-term"] == ["widget"]
+
+
+def test_matching_is_word_boundaried(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    root = _write(tmp_path, "README", "[w](glossary/widget.md) [g](guide.md)\n")
+    _write(tmp_path, "guide", "Many widgets and midwidget things.\n")
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+def test_compound_term_mention_is_not_a_mention_of_its_parts(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    _write(glossary_dir, "widget-factory", "## Widget factory\n\n[[widget]] maker.\n")
+    root = _write(
+        tmp_path,
+        "README",
+        "[w](glossary/widget.md) [wf](glossary/widget-factory.md) [g](guide.md)\n",
+    )
+    _write(
+        tmp_path,
+        "guide",
+        "A [widget-factory](glossary/widget-factory.md) runs; "
+        "the widget-factory hums.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
