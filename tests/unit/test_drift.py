@@ -486,8 +486,8 @@ def test_term_case_is_suppressible_and_baselined(tmp_path: Path) -> None:
 
     glossary_dir, root = _widget_project(
         tmp_path,
-        "See the [widget](glossary/widget.md). Then the Widget spins.\n"
-        "<!-- d10e: ignore[term-case] widget -->\n",
+        "<!-- d10e: ignore[term-case] widget -->\n"
+        "See the [widget](glossary/widget.md). Then the Widget spins.\n",
     )
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
