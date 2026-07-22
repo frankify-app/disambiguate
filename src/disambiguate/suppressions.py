@@ -18,7 +18,8 @@ markdown. The hint keyword is `d10e` (numeronym of `disambiguate`);
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 
 # One regex per hint form. The keyword is `d10e` or `disambiguate`; the
 # rule-code is bracketed; an inline hint may carry a target term after the
@@ -72,6 +73,39 @@ def parse_inline_hints(text: str) -> list[InlineHint]:
             )
         )
     return hints
+
+
+@dataclass(frozen=True)
+class DriftConfig:
+    """
+    Config-level suppression settings from `[tool.disambiguate]`.
+
+    ignore: rule-codes disabled repo-wide.
+    ignore_paths: path glob (relative to `root`) -> rule-codes disabled
+        under that glob.
+    root: directory the globs are relative to (the pyproject.toml's
+        directory); None when the config was built without one.
+    """
+
+    ignore: list[str] = field(default_factory=list)
+    ignore_paths: dict[str, list[str]] = field(default_factory=dict)
+    root: Path | None = None
+
+
+def load_drift_config(start: Path) -> DriftConfig | None:
+    """
+    Load `[tool.disambiguate]` from the nearest pyproject.toml.
+
+    start: directory to walk up from.
+
+    Returns
+    -------
+    A DriftConfig when a pyproject.toml with a `[tool.disambiguate]`
+    section is found; None when no pyproject.toml exists on the walk-up
+    path or the section is absent.
+
+    """
+    raise NotImplementedError
 
 
 @dataclass(frozen=True)

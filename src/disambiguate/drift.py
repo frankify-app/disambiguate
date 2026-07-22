@@ -18,6 +18,7 @@ from .lint import walk_reachable
 from .mentions import find_mentions
 from .parser import extract_all_link_slugs
 from .suppressions import (
+    DriftConfig,
     inline_hint_covers,
     parse_file_hints,
     parse_inline_hints,
@@ -99,12 +100,17 @@ def _read_corpus(glossary: Glossary, roots: list[Path]) -> dict[Path, str]:
     return corpus
 
 
-def run_drift_checks(glossary: Glossary, roots: list[Path]) -> list[DriftFinding]:
+def run_drift_checks(
+    glossary: Glossary,
+    roots: list[Path],
+    config: DriftConfig | None = None,
+) -> list[DriftFinding]:
     """
     Run every drift-check over the corpus reachable from `roots`.
 
     glossary: loaded glossary.
     roots: documents from which the corpus walk starts.
+    config: config-level suppression settings, or None for none.
 
     Returns
     -------

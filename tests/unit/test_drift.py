@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -215,3 +217,55 @@ def test_long_form_disambiguate_keyword_is_accepted(tmp_path: Path) -> None:
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_config_ignore_silences_rule_repo_wide(tmp_path: Path) -> None:
+    from disambiguate.suppressions import DriftConfig
+
+    glossary_dir, root = _widget_project(tmp_path, "The widget spins.\n")
+    glossary = load_glossary(glossary_dir)
+    config = DriftConfig(ignore=["unlinked-term"], ignore_paths={})
+    findings = run_drift_checks(glossary, roots=[root], config=config)
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_config_ignore_paths_scopes_by_glob(tmp_path: Path) -> None:
+    from disambiguate.suppressions import DriftConfig
+
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    root = _write(
+        tmp_path,
+        "README",
+        "[w](glossary/widget.md) [g](guide.md) [o](other.md)\n",
+    )
+    _write(tmp_path, "guide", "The widget spins.\n")
+    _write(tmp_path, "other", "The widget hums.\n")
+    glossary = load_glossary(glossary_dir)
+    config = DriftConfig(
+        ignore=[],
+        ignore_paths={"guide.md": ["unlinked-term"]},
+        root=tmp_path,
+    )
+    findings = run_drift_checks(glossary, roots=[root], config=config)
+    flagged = sorted(f.path.name for f in findings if f.rule_code == "unlinked-term")
+    assert flagged == ["other.md"]
+
+
+@pytest.mark.xfail(strict=True)
+def test_load_drift_config_reads_pyproject(tmp_path: Path) -> None:
+    from disambiguate.suppressions import load_drift_config
+
+    (tmp_path / "pyproject.toml").write_text(
+        "[tool.disambiguate]\n"
+        'drift-ignore = ["unlinked-term"]\n'
+        "[tool.disambiguate.drift-ignore-paths]\n"
+        '"docs/*.md" = ["term-case"]\n',
+        encoding="utf-8",
+    )
+    config = load_drift_config(tmp_path)
+    assert config is not None
+    assert config.ignore == ["unlinked-term"]
+    assert config.ignore_paths == {"docs/*.md": ["term-case"]}
