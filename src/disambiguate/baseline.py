@@ -14,6 +14,7 @@ they survive unrelated edits to the same file.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -51,7 +52,11 @@ def finding_key(finding: DriftFinding, root: Path) -> str:
     posix form when it is outside `root`.
 
     """
-    raise NotImplementedError
+    try:
+        relative = finding.path.resolve().relative_to(root.resolve()).as_posix()
+    except ValueError:
+        relative = finding.path.resolve().as_posix()
+    return f"{relative}:{finding.rule_code}:{finding.term}"
 
 
 def save_baseline(path: Path, findings: list[DriftFinding]) -> None:
@@ -62,7 +67,10 @@ def save_baseline(path: Path, findings: list[DriftFinding]) -> None:
         parent directory.
     findings: the findings to grandfather.
     """
-    raise NotImplementedError
+    root = path.resolve().parent
+    keys = sorted({finding_key(finding, root) for finding in findings})
+    payload = {"version": BASELINE_VERSION, "findings": keys}
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 def load_baseline(path: Path) -> Baseline | None:
@@ -76,7 +84,10 @@ def load_baseline(path: Path) -> Baseline | None:
     The Baseline, or None when `path` does not exist.
 
     """
-    raise NotImplementedError
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    return Baseline(path=path.resolve(), keys=frozenset(payload["findings"]))
 
 
 def apply_baseline(
@@ -95,4 +106,12 @@ def apply_baseline(
     matched anymore (prunable).
 
     """
-    raise NotImplementedError
+    root = baseline.path.parent
+    seen_keys = {finding_key(finding, root) for finding in findings}
+    fresh = [
+        finding
+        for finding in findings
+        if finding_key(finding, root) not in baseline.keys
+    ]
+    stale_keys = sorted(baseline.keys - seen_keys)
+    return fresh, stale_keys
