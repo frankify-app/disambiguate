@@ -6,6 +6,10 @@ avoided-term) in a document's prose. Matching is case-insensitive and
 word-boundaried, where a hyphen counts as a word character: `term` does not
 match inside `unlinked-term`, so a mention of a compound term never doubles
 as a mention of its parts.
+
+DECISION:SCOPE — "word boundary" is interpreted hyphen-aware; compound-term
+mentions are not mentions of their parts (avoids false positives between
+e.g. `drift` and `drift-check`).
 """
 
 from __future__ import annotations
