@@ -377,7 +377,6 @@ def test_from_file_ignores_links_to_existing_non_glossary_docs(
     assert "## A" in out
 
 
-@pytest.mark.xfail(strict=True)
 def test_drift_reports_unlinked_term_and_fails(tmp_path: Path) -> None:
     project = _setup_project(tmp_path)
     (tmp_path / "README.md").write_text(
@@ -395,7 +394,6 @@ def test_drift_reports_unlinked_term_and_fails(tmp_path: Path) -> None:
     assert "topological-order" in stderr
 
 
-@pytest.mark.xfail(strict=True)
 def test_drift_clean_corpus_exits_zero(tmp_path: Path) -> None:
     project = _setup_project(tmp_path)
     code, _, stderr = _run(["--drift"], project)
