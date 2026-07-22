@@ -13,3 +13,6 @@ Shipped drift-checks:
   the convention, later plain mentions are fine. A term used with a
   non-glossary (colloquial) meaning is intentionally the same finding: an
   unlinked mention either should be linked or should be reworded.
+- `wrong-alias`: prose uses an [avoided-term](avoided-term.md) — a
+  forbidden synonym — where the canonical term is meant. The finding names
+  the canonical term to use instead.
