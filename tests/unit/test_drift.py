@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -219,7 +217,6 @@ def test_long_form_disambiguate_keyword_is_accepted(tmp_path: Path) -> None:
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_config_ignore_silences_rule_repo_wide(tmp_path: Path) -> None:
     from disambiguate.suppressions import DriftConfig
 
@@ -230,7 +227,6 @@ def test_config_ignore_silences_rule_repo_wide(tmp_path: Path) -> None:
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_config_ignore_paths_scopes_by_glob(tmp_path: Path) -> None:
     from disambiguate.suppressions import DriftConfig
 
@@ -254,7 +250,6 @@ def test_config_ignore_paths_scopes_by_glob(tmp_path: Path) -> None:
     assert flagged == ["other.md"]
 
 
-@pytest.mark.xfail(strict=True)
 def test_load_drift_config_reads_pyproject(tmp_path: Path) -> None:
     from disambiguate.suppressions import load_drift_config
 

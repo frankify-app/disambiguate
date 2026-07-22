@@ -41,6 +41,7 @@ from .logging_config import DEBUG_LEVEL, configure_logging
 from .prune import apply_prune, format_dry_run, plan_prune
 from .renderer import build_explain_preamble, render_terms
 from .resolver import CycleError, UnknownSlugError, resolve
+from .suppressions import load_drift_config
 
 logger = logging.getLogger(__name__)
 
@@ -305,7 +306,8 @@ def _run_lint(glossary: Glossary, roots: list[Path]) -> int:
 
 def _run_drift(glossary: Glossary, roots: list[Path]) -> int:
     """Run the drift-checks and report findings to stderr; return exit code."""
-    findings = run_drift_checks(glossary, roots=roots)
+    config = load_drift_config(Path.cwd())
+    findings = run_drift_checks(glossary, roots=roots, config=config)
     if not findings:
         return EXIT_OK
     for finding in findings:
