@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -156,3 +158,44 @@ def test_compound_term_mention_is_not_a_mention_of_its_parts(tmp_path: Path) -> 
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+def _widget_project(tmp_path: Path, guide_text: str) -> tuple[Path, Path]:
+    """Glossary with `widget` + README root linking guide.md with `guide_text`."""
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    root = _write(tmp_path, "README", "[w](glossary/widget.md) [g](guide.md)\n")
+    _write(tmp_path, "guide", guide_text)
+    return glossary_dir, root
+
+
+@pytest.mark.xfail(strict=True)
+def test_inline_ignore_hint_on_same_line_silences_finding(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "The widget spins. <!-- d10e: ignore[unlinked-term] widget -->\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_inline_ignore_hint_on_line_above_silences_finding(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "<!-- d10e: ignore[unlinked-term] widget -->\nThe widget spins.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+def test_inline_ignore_hint_far_away_does_not_silence(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "The widget spins.\n\n\nText.\n<!-- d10e: ignore[unlinked-term] widget -->\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f.term for f in findings if f.rule_code == "unlinked-term"] == ["widget"]
