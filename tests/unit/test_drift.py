@@ -478,3 +478,35 @@ def test_term_case_skips_code_and_links(tmp_path: Path) -> None:
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
     assert [f for f in findings if f.rule_code == "term-case"] == []
+
+
+def test_term_case_is_suppressible_and_baselined(tmp_path: Path) -> None:
+    from disambiguate.baseline import apply_baseline, load_baseline, save_baseline
+    from disambiguate.suppressions import DriftConfig
+
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). Then the Widget spins.\n"
+        "<!-- d10e: ignore[term-case] widget -->\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "term-case"] == []
+
+    hintless = tmp_path / "guide.md"
+    hintless.write_text(
+        "See the [widget](glossary/widget.md). Then the Widget spins.\n",
+        encoding="utf-8",
+    )
+    config = DriftConfig(ignore=["term-case"], ignore_paths={}, root=tmp_path)
+    findings = run_drift_checks(glossary, roots=[root], config=config)
+    assert [f for f in findings if f.rule_code == "term-case"] == []
+
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f.rule_code for f in findings] == ["term-case"]
+    baseline_path = tmp_path / ".drift-baseline.json"
+    save_baseline(baseline_path, findings)
+    baseline = load_baseline(baseline_path)
+    assert baseline is not None
+    fresh, _ = apply_baseline(findings, baseline)
+    assert fresh == []
