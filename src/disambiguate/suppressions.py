@@ -28,6 +28,10 @@ _INLINE_HINT_RE = re.compile(
     r"(?:\s+(?P<target>[^>\s]+))?\s*-->"
 )
 
+_FILE_HINT_RE = re.compile(
+    r"<!--\s*(?:d10e|disambiguate):\s*ignore-file\[(?P<rule>[a-z0-9-]+)\]\s*-->"
+)
+
 
 @dataclass(frozen=True)
 class InlineHint:
@@ -67,6 +71,38 @@ def parse_inline_hints(text: str) -> list[InlineHint]:
                 target=match.group("target"),
             )
         )
+    return hints
+
+
+@dataclass(frozen=True)
+class FileHint:
+    """
+    One file-level opt-out parsed from a document.
+
+    line: 1-based line the hint sits on (used only for reporting).
+    rule_code: the rule-code disabled for the whole document.
+    """
+
+    line: int
+    rule_code: str
+
+
+def parse_file_hints(text: str) -> list[FileHint]:
+    """
+    Parse every file-level ignore-file hint in `text`, in document order.
+
+    text: full markdown source of a document.
+
+    Returns
+    -------
+    A list of FileHint objects; empty list when the document carries no
+    file-level opt-outs.
+
+    """
+    hints: list[FileHint] = []
+    for match in _FILE_HINT_RE.finditer(text):
+        line = 1 + text.count("\n", 0, match.start())
+        hints.append(FileHint(line=line, rule_code=match.group("rule")))
     return hints
 
 
