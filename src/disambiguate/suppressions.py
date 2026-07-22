@@ -18,7 +18,9 @@ markdown. The hint keyword is `d10e` (numeronym of `disambiguate`);
 from __future__ import annotations
 
 import re
+import tomllib
 from dataclasses import dataclass, field
+from fnmatch import fnmatch
 from pathlib import Path
 
 # One regex per hint form. The keyword is `d10e` or `disambiguate`; the
@@ -91,6 +93,28 @@ class DriftConfig:
     ignore_paths: dict[str, list[str]] = field(default_factory=dict)
     root: Path | None = None
 
+    def covers(self, rule_code: str, path: Path) -> bool:
+        """Return True when this config silences `rule_code` for `path`."""
+        if rule_code in self.ignore:
+            return True
+        for pattern, rules in self.ignore_paths.items():
+            if rule_code not in rules:
+                continue
+            if _glob_covers(pattern, path, self.root):
+                return True
+        return False
+
+
+def _glob_covers(pattern: str, path: Path, root: Path | None) -> bool:
+    """Match `path` against a config glob relative to `root` (or absolute)."""
+    if root is not None:
+        try:
+            relative = path.resolve().relative_to(root.resolve())
+        except ValueError:
+            return False
+        return fnmatch(relative.as_posix(), pattern)
+    return fnmatch(path.as_posix(), pattern)
+
 
 def load_drift_config(start: Path) -> DriftConfig | None:
     """
@@ -105,7 +129,24 @@ def load_drift_config(start: Path) -> DriftConfig | None:
     path or the section is absent.
 
     """
-    raise NotImplementedError
+    for directory in [start.resolve(), *start.resolve().parents]:
+        pyproject = directory / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        with pyproject.open("rb") as handle:
+            data = tomllib.load(handle)
+        section = data.get("tool", {}).get("disambiguate")
+        if section is None:
+            return None
+        return DriftConfig(
+            ignore=list(section.get("drift-ignore", [])),
+            ignore_paths={
+                pattern: list(rules)
+                for pattern, rules in section.get("drift-ignore-paths", {}).items()
+            },
+            root=directory,
+        )
+    return None
 
 
 @dataclass(frozen=True)

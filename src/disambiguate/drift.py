@@ -120,13 +120,15 @@ def run_drift_checks(
     """
     corpus = _read_corpus(glossary, roots)
     raw_findings = _check_unlinked_terms(glossary, corpus)
-    return _apply_suppressions(raw_findings, corpus)
+    return _apply_suppressions(raw_findings, corpus, config)
 
 
 def _apply_suppressions(
-    findings: list[DriftFinding], corpus: dict[Path, str]
+    findings: list[DriftFinding],
+    corpus: dict[Path, str],
+    config: DriftConfig | None = None,
 ) -> list[DriftFinding]:
-    """Drop findings covered by an ignore-hint in their own document."""
+    """Drop findings covered by a config ignore or an ignore-hint."""
     inline_by_path = {path: parse_inline_hints(text) for path, text in corpus.items()}
     file_rules_by_path = {
         path: {hint.rule_code for hint in parse_file_hints(text)}
@@ -134,6 +136,8 @@ def _apply_suppressions(
     }
     kept: list[DriftFinding] = []
     for finding in findings:
+        if config is not None and config.covers(finding.rule_code, finding.path):
+            continue
         if finding.rule_code in file_rules_by_path.get(finding.path, set()):
             continue
         hints = inline_by_path.get(finding.path, [])
