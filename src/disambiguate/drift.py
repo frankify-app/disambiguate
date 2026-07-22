@@ -19,6 +19,9 @@ from .mentions import find_mentions
 from .parser import extract_all_link_slugs
 from .suppressions import (
     DriftConfig,
+    FileHint,
+    InlineHint,
+    glob_covers,
     inline_hint_covers,
     parse_file_hints,
     parse_inline_hints,
@@ -128,23 +131,137 @@ def _apply_suppressions(
     corpus: dict[Path, str],
     config: DriftConfig | None = None,
 ) -> list[DriftFinding]:
-    """Drop findings covered by a config ignore or an ignore-hint."""
+    """
+    Drop findings covered by a suppression; report stale suppressions.
+
+    Precedence is config, then file, then inline — coarsest wins. A
+    suppression that covers no raw finding is itself reported as a fatal
+    `stale-suppression` finding, unless a coarser suppression of the same
+    rule-code shadows it (an inline hint under a file-level opt-out, or
+    either under a config ignore, must not be reported stale).
+    """
     inline_by_path = {path: parse_inline_hints(text) for path, text in corpus.items()}
-    file_rules_by_path = {
-        path: {hint.rule_code for hint in parse_file_hints(text)}
-        for path, text in corpus.items()
-    }
+    file_hints_by_path = {path: parse_file_hints(text) for path, text in corpus.items()}
     kept: list[DriftFinding] = []
     for finding in findings:
+        file_rules = {hint.rule_code for hint in file_hints_by_path[finding.path]}
         if config is not None and config.covers(finding.rule_code, finding.path):
             continue
-        if finding.rule_code in file_rules_by_path.get(finding.path, set()):
+        if finding.rule_code in file_rules:
             continue
-        hints = inline_by_path.get(finding.path, [])
+        hints = inline_by_path[finding.path]
         if any(
             inline_hint_covers(hint, finding.rule_code, finding.line, finding.term)
             for hint in hints
         ):
             continue
         kept.append(finding)
+
+    kept.extend(
+        _stale_suppression_findings(
+            findings, inline_by_path, file_hints_by_path, config
+        )
+    )
     return kept
+
+
+def _stale_suppression_findings(
+    raw_findings: list[DriftFinding],
+    inline_by_path: dict[Path, list[InlineHint]],
+    file_hints_by_path: dict[Path, list[FileHint]],
+    config: DriftConfig | None,
+) -> list[DriftFinding]:
+    """
+    Report each suppression that matches no raw finding and is unshadowed.
+
+    Matching is computed against the raw (pre-suppression) findings so a
+    hint is "used" even when a coarser surface also covers its finding.
+    """
+    stale: list[DriftFinding] = []
+
+    def config_covers(rule_code: str, path: Path) -> bool:
+        return config is not None and config.covers(rule_code, path)
+
+    for path in sorted(file_hints_by_path):
+        raw_here = [f for f in raw_findings if f.path == path]
+        file_rules = {hint.rule_code for hint in file_hints_by_path[path]}
+
+        for hint in file_hints_by_path[path]:
+            matches = any(f.rule_code == hint.rule_code for f in raw_here)
+            shadowed = config_covers(hint.rule_code, path)
+            if not matches and not shadowed:
+                stale.append(
+                    DriftFinding(
+                        rule_code="stale-suppression",
+                        path=path,
+                        line=hint.line,
+                        term="",
+                        message=(
+                            f"ignore-file[{hint.rule_code}] opt-out matches "
+                            f"no finding in this document; remove it"
+                        ),
+                    )
+                )
+
+        for inline in inline_by_path[path]:
+            matches = any(
+                inline_hint_covers(inline, f.rule_code, f.line, f.term)
+                for f in raw_here
+            )
+            shadowed = inline.rule_code in file_rules or config_covers(
+                inline.rule_code, path
+            )
+            if not matches and not shadowed:
+                stale.append(
+                    DriftFinding(
+                        rule_code="stale-suppression",
+                        path=path,
+                        line=inline.line,
+                        term=inline.target or "",
+                        message=(
+                            f"ignore[{inline.rule_code}] hint matches no "
+                            f"finding on its line or the line below; "
+                            f"remove it"
+                        ),
+                    )
+                )
+
+    if config is not None:
+        config_path = (
+            config.root / "pyproject.toml" if config.root else Path("pyproject.toml")
+        )
+        for rule_code in config.ignore:
+            if not any(f.rule_code == rule_code for f in raw_findings):
+                stale.append(
+                    DriftFinding(
+                        rule_code="stale-suppression",
+                        path=config_path,
+                        line=1,
+                        term="",
+                        message=(
+                            f"config drift-ignore entry {rule_code!r} "
+                            f"matches no finding in the corpus; remove it"
+                        ),
+                    )
+                )
+        for pattern, rules in config.ignore_paths.items():
+            for rule_code in rules:
+                if not any(
+                    f.rule_code == rule_code
+                    and glob_covers(pattern, f.path, config.root)
+                    for f in raw_findings
+                ):
+                    stale.append(
+                        DriftFinding(
+                            rule_code="stale-suppression",
+                            path=config_path,
+                            line=1,
+                            term="",
+                            message=(
+                                f"config drift-ignore-paths entry "
+                                f"{pattern!r}: {rule_code!r} matches no "
+                                f"finding in the corpus; remove it"
+                            ),
+                        )
+                    )
+    return stale

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -268,7 +266,6 @@ def test_load_drift_config_reads_pyproject(tmp_path: Path) -> None:
     assert config.ignore_paths == {"docs/*.md": ["term-case"]}
 
 
-@pytest.mark.xfail(strict=True)
 def test_stale_inline_hint_is_fatal_finding(tmp_path: Path) -> None:
     glossary_dir, root = _widget_project(
         tmp_path,
@@ -282,7 +279,6 @@ def test_stale_inline_hint_is_fatal_finding(tmp_path: Path) -> None:
     assert stale[0].line == 2
 
 
-@pytest.mark.xfail(strict=True)
 def test_stale_file_opt_out_is_fatal_finding(tmp_path: Path) -> None:
     glossary_dir, root = _widget_project(
         tmp_path,
@@ -293,7 +289,6 @@ def test_stale_file_opt_out_is_fatal_finding(tmp_path: Path) -> None:
     assert [f.rule_code for f in findings] == ["stale-suppression"]
 
 
-@pytest.mark.xfail(strict=True)
 def test_stale_config_ignore_is_fatal_finding(tmp_path: Path) -> None:
     from disambiguate.suppressions import DriftConfig
 
