@@ -61,6 +61,10 @@ _D10E_ANNOTATION_RE = re.compile(r"<!--\s*d10e:\s*(?P<annotations>[^>]*?)\s*-->"
 
 AUTO_PRUNE = "auto-prune"
 
+# Avoided-terms line (ADR 0001): literal `_Avoid_:` prefix, then
+# comma-separated aliases on the same line.
+_AVOID_LINE_RE = re.compile(r"^_Avoid_:\s*(?P<aliases>.+?)\s*$", re.MULTILINE)
+
 # Standard markdown link to an .md file: [text](path/to/foo.md), with an
 # optional #fragment after the path — the fragment is stripped, only the
 # path is captured. `#` is excluded from path characters so the greedy path
@@ -262,4 +266,9 @@ def extract_avoided_terms(text: str) -> list[str]:
     is present.
 
     """
-    raise NotImplementedError
+    match = _AVOID_LINE_RE.search(text)
+    if match is None:
+        return []
+    return [
+        alias.strip() for alias in match.group("aliases").split(",") if alias.strip()
+    ]

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from disambiguate.parser import ParsedTerm, parse_term_text
 
 
@@ -146,7 +144,6 @@ def test_auto_prune_marker_is_parsed_as_consent() -> None:
     assert plain.auto_prune is False
 
 
-@pytest.mark.xfail(strict=True)
 def test_extract_avoided_terms_parses_comma_separated_line() -> None:
     from disambiguate.parser import extract_avoided_terms
 
@@ -154,7 +151,6 @@ def test_extract_avoided_terms_parses_comma_separated_line() -> None:
     assert extract_avoided_terms(text) == ["gadget", "thing-a-majig"]
 
 
-@pytest.mark.xfail(strict=True)
 def test_extract_avoided_terms_absent_line_gives_empty_list() -> None:
     from disambiguate.parser import extract_avoided_terms
 
