@@ -13,6 +13,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
+from .parser import _FENCED_CODE_RE, _INLINE_CODE_RE
+
+# Whole-link spans to exclude from mention matching: a mention inside an
+# existing cross-reference (or any link's display text) is already linked
+# prose, not drift. Images (`![...](...)`) are covered by the same pattern.
+_MD_LINK_SPAN_RE = re.compile(r"!?\[[^\]]*\]\([^)]*\)")
+_WIKILINK_SPAN_RE = re.compile(r"!?\[\[[^\]]*\]\]")
+
 
 @dataclass(frozen=True)
 class Mention:
@@ -45,9 +53,34 @@ def _variant_pattern(variants: list[str]) -> re.Pattern[str]:
     )
 
 
+def masked_spans(text: str) -> list[tuple[int, int]]:
+    """
+    Return the (start, end) spans of `text` excluded from mention matching.
+
+    Excluded regions: fenced code blocks, inline code spans, and whole
+    links of either syntax (markdown and wiki-style), including their
+    display text. Spans are in document order and may touch but not nest.
+    """
+    spans: list[tuple[int, int]] = []
+    for pattern in (
+        _FENCED_CODE_RE,
+        _INLINE_CODE_RE,
+        _MD_LINK_SPAN_RE,
+        _WIKILINK_SPAN_RE,
+    ):
+        for match in pattern.finditer(text):
+            spans.append((match.start(), match.end()))
+    return sorted(spans)
+
+
+def _is_masked(offset: int, end: int, spans: list[tuple[int, int]]) -> bool:
+    """Return True when [offset, end) intersects any masked span."""
+    return any(offset < span_end and end > span_start for span_start, span_end in spans)
+
+
 def find_mentions(text: str, variants: list[str]) -> list[Mention]:
     """
-    Find every mention of any variant in `text`, in document order.
+    Find every prose mention of any variant in `text`, in document order.
 
     text: full markdown source of a document.
     variants: non-empty spellings to match (canonical name, slug, ...).
@@ -55,12 +88,16 @@ def find_mentions(text: str, variants: list[str]) -> list[Mention]:
     Returns
     -------
     A list of Mention objects ordered by offset; empty list when nothing
-    matches.
+    matches. Matches inside code fences, inline code spans, or links
+    (either syntax, display text included) are excluded.
 
     """
     pattern = _variant_pattern([v for v in variants if v])
+    spans = masked_spans(text)
     mentions: list[Mention] = []
     for match in pattern.finditer(text):
+        if _is_masked(match.start(), match.end(), spans):
+            continue
         line = 1 + text.count("\n", 0, match.start())
         mentions.append(
             Mention(offset=match.start(), line=line, matched=match.group(0))

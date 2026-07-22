@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -61,7 +59,6 @@ def test_linked_once_silences_later_plain_mentions(tmp_path: Path) -> None:
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_mention_inside_inline_code_span_is_not_drift(tmp_path: Path) -> None:
     glossary_dir = _setup_glossary(tmp_path)
     _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
@@ -76,7 +73,6 @@ def test_mention_inside_inline_code_span_is_not_drift(tmp_path: Path) -> None:
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_mention_inside_code_fence_is_not_drift(tmp_path: Path) -> None:
     glossary_dir = _setup_glossary(tmp_path)
     _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
@@ -91,7 +87,6 @@ def test_mention_inside_code_fence_is_not_drift(tmp_path: Path) -> None:
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_mention_inside_markdown_link_display_text_is_not_drift(
     tmp_path: Path,
 ) -> None:
@@ -108,7 +103,6 @@ def test_mention_inside_markdown_link_display_text_is_not_drift(
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_mention_inside_wikilink_display_text_is_not_drift(tmp_path: Path) -> None:
     glossary_dir = _setup_glossary(tmp_path)
     _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
