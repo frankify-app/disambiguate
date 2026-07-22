@@ -13,6 +13,12 @@ Three ways to silence a drift finding, coarsest first:
 Hints live inside HTML comments so they are invisible in rendered
 markdown. The hint keyword is `d10e` (numeronym of `disambiguate`);
 `disambiguate` is accepted as a long-form alias.
+
+DECISION:IFACE — config schema is `drift-ignore` (list of rule-codes) and
+`drift-ignore-paths` (glob -> rule-codes) under `[tool.disambiguate]`;
+inline hints cover their own line and the one below; the stale finding's
+rule-code is `stale-suppression`. None of these names were pinned by the
+ticket.
 """
 
 from __future__ import annotations

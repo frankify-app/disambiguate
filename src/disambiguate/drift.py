@@ -64,6 +64,9 @@ def _check_unlinked_terms(
     A single link to the term anywhere in the document satisfies the rule
     for every mention in that document. A term is never checked against its
     own defining file — a definition necessarily names itself.
+
+    DECISION:SCOPE — self-file exemption is not in the ticket; without it
+    every term file flags itself for naming its own term.
     """
     findings: list[DriftFinding] = []
     for path in sorted(corpus):
@@ -147,6 +150,12 @@ def _is_proper_noun(name: str) -> bool:
     convention: an internal capital ("GitHub") or a capitalized non-first
     word ("Term Case"). A single leading capital on the first word is
     heading style, not evidence ("Widget" stays a common noun).
+
+    DECISION:SCOPE — the ticket's "Title-Cased H2 implies proper noun" is
+    undecidable for single-word H2s (every H2 here capitalizes its first
+    letter), so single-leading-capital derives as common noun. Known
+    misclassification: "Disambiguate". Escape hatches: suppression,
+    baseline, backlog B2 override.
     """
     words = name.split()
     for index, word in enumerate(words):
