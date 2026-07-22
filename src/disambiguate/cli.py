@@ -1,12 +1,13 @@
 """
 Command-line entry point.
 
-Argparse-driven dispatch with four operating modes:
+Argparse-driven dispatch with five operating modes:
 
 - default: render selected slugs (or whole glossary) using the user's glossary
 - `--from <doc>`: extract slugs from a document, then render
 - `--explain`: render Disambiguate's own bundled glossary, with preamble
 - `--lint`: validate the user's glossary
+- `--drift`: detect prose drifting from the glossary
 
 Plus one verb, dispatched before the parser: `prune`, which removes
 terms nothing links.
@@ -32,6 +33,7 @@ from .discovery import (
     find_glossary,
     resolve_default_root,
 )
+from .drift import run_drift_checks
 from .from_mode import BrokenFromLinkError, extract_slugs
 from .glossary import DuplicateSlugError, Glossary, load_glossary
 from .lint import lint_glossary
@@ -109,6 +111,15 @@ def _build_parser() -> argparse.ArgumentParser:
         dest="lint",
         action="store_true",
         help="Validate the glossary against six fatal checks.",
+    )
+    mode.add_argument(
+        "--drift",
+        dest="drift",
+        action="store_true",
+        help=(
+            "Detect prose drifting from the glossary (fatal drift-checks "
+            "over the corpus reachable from the lint roots)."
+        ),
     )
     parser.add_argument(
         "--roots",
@@ -292,6 +303,21 @@ def _run_lint(glossary: Glossary, roots: list[Path]) -> int:
     return EXIT_FAILURE
 
 
+def _run_drift(glossary: Glossary, roots: list[Path]) -> int:
+    """Run the drift-checks and report findings to stderr; return exit code."""
+    findings = run_drift_checks(glossary, roots=roots)
+    if not findings:
+        return EXIT_OK
+    for finding in findings:
+        # Like lint findings, drift findings are diagnostics: stderr keeps
+        # stdout clean for composing with pipes.
+        print(
+            f"{finding.path}:{finding.line}: {finding.rule_code}: {finding.message}",
+            file=sys.stderr,
+        )
+    return EXIT_FAILURE
+
+
 def _run_default(glossary: Glossary, slugs: list[str]) -> int:
     """Resolve the requested slugs and print to stdout."""
     terms = resolve(glossary, _normalize_requested_slugs(slugs))
@@ -363,6 +389,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             glossary = load_glossary(_user_glossary_path(args.glossary))
             roots = _resolve_lint_roots(args.roots)
             return _run_lint(glossary, roots)
+
+        if args.drift:
+            glossary = load_glossary(_user_glossary_path(args.glossary))
+            roots = _resolve_lint_roots(args.roots)
+            return _run_drift(glossary, roots)
 
         if args.from_doc is not None:
             glossary = load_glossary(_user_glossary_path(args.glossary))
