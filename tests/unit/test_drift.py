@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -345,7 +343,6 @@ def _aliased_project(tmp_path: Path, guide_text: str) -> tuple[Path, Path]:
     return glossary_dir, root
 
 
-@pytest.mark.xfail(strict=True)
 def test_avoided_term_use_produces_wrong_alias_finding(tmp_path: Path) -> None:
     glossary_dir, root = _aliased_project(
         tmp_path,
