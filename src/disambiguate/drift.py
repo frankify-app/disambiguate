@@ -13,7 +13,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .glossary import Glossary
+from .glossary import Glossary, Term
+from .lint import _walk_reachable
+from .mentions import find_mentions
+from .parser import extract_all_link_slugs
 
 
 @dataclass(frozen=True)
@@ -35,6 +38,62 @@ class DriftFinding:
     message: str
 
 
+def _term_variants(term: Term) -> list[str]:
+    """Return the spellings that count as a mention of `term`."""
+    variants = [term.slug]
+    if term.canonical_name is not None:
+        variants.append(term.canonical_name)
+    return variants
+
+
+def _check_unlinked_terms(
+    glossary: Glossary, corpus: dict[Path, str]
+) -> list[DriftFinding]:
+    """
+    Report each (document, term) pair mentioned in prose but never linked.
+
+    A single link to the term anywhere in the document satisfies the rule
+    for every mention in that document. A term is never checked against its
+    own defining file — a definition necessarily names itself.
+    """
+    findings: list[DriftFinding] = []
+    for path in sorted(corpus):
+        text = corpus[path]
+        linked_slugs = set(extract_all_link_slugs(text))
+        for slug in sorted(glossary.terms):
+            term = glossary.terms[slug]
+            if path == term.path.resolve():
+                continue
+            if slug in linked_slugs:
+                continue
+            mentions = find_mentions(text, _term_variants(term))
+            if not mentions:
+                continue
+            first = mentions[0]
+            findings.append(
+                DriftFinding(
+                    rule_code="unlinked-term",
+                    path=path,
+                    line=first.line,
+                    term=slug,
+                    message=(
+                        f"{first.matched!r} is mentioned but never linked in "
+                        f"this document; link the term once, e.g. "
+                        f"[{first.matched}]({slug}.md)"
+                    ),
+                )
+            )
+    return findings
+
+
+def _read_corpus(glossary: Glossary, roots: list[Path]) -> dict[Path, str]:
+    """Read every document reachable from `roots` into memory, keyed by path."""
+    corpus: dict[Path, str] = {}
+    for path in _walk_reachable(roots, glossary):
+        corpus[path] = path.read_text(encoding="utf-8")
+    return corpus
+
+
 def run_drift_checks(glossary: Glossary, roots: list[Path]) -> list[DriftFinding]:
     """
     Run every drift-check over the corpus reachable from `roots`.
@@ -44,7 +103,9 @@ def run_drift_checks(glossary: Glossary, roots: list[Path]) -> list[DriftFinding
 
     Returns
     -------
-    A list of DriftFinding objects; empty list means no drift.
+    A list of DriftFinding objects; empty list means no drift. Order is
+    deterministic: by document path, then rule-code order per document.
 
     """
-    raise NotImplementedError
+    corpus = _read_corpus(glossary, roots)
+    return _check_unlinked_terms(glossary, corpus)
