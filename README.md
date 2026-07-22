@@ -79,7 +79,8 @@ backs [from-mode](docs/glossary/from-mode.md) and `--explain`.
 vocabulary without following it: terms mentioned but never linked, and (as
 the checks grow) forbidden synonyms and wrong casing. Each
 [drift-check](docs/glossary/drift-check.md) reports fatal findings named by
-a stable [rule-code](docs/glossary/rule-code.md).
+a stable [rule-code](docs/glossary/rule-code.md); false positives are
+silenced precisely with [ignore-hints](docs/glossary/ignore-hint.md).
 
 For the architectural map, see [docs/architecture.md](docs/architecture.md).
 For the full vocabulary, see the
