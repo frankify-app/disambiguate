@@ -399,3 +399,19 @@ def test_drift_clean_corpus_exits_zero(tmp_path: Path) -> None:
     code, _, stderr = _run(["--drift"], project)
     assert code == 0
     assert stderr == ""
+
+
+@pytest.mark.xfail(strict=True)
+def test_drift_output_prints_suppression_hint_syntax(tmp_path: Path) -> None:
+    project = _setup_project(tmp_path)
+    (tmp_path / "README.md").write_text(
+        "[topological-order](docs/glossary/topological-order.md) [guide](guide.md)\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "guide.md").write_text(
+        "Sort in topological order.\n",
+        encoding="utf-8",
+    )
+    code, _, stderr = _run(["--drift"], project)
+    assert code == 1
+    assert "<!-- d10e: ignore[unlinked-term] topological-order -->" in stderr
