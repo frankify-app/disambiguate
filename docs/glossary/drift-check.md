@@ -18,11 +18,11 @@ Shipped drift-checks:
   the canonical term to use instead.
 - `term-case`: a mid-sentence term-mention written with casing that
   disagrees with the term's H2 heading. Expected casing is derived from
-  the heading: an internal capital ("GitHub") or a capitalized non-first
-  word ("Term Case") marks a proper noun kept verbatim; otherwise the
+  the heading: an internal capital (`GitHub`) or a capitalized non-first
+  word (`Term Case`) marks a proper noun kept verbatim; otherwise the
   heading capital is heading style and prose expects lowercase.
   Sentence-initial mentions are always skipped — a capital there is
   grammar, not drift. Single-word proper nouns whose only capital is the
-  first letter ("Disambiguate") are indistinguishable from heading style
+  first letter (`Disambiguate`) are indistinguishable from heading style
   and derive as common nouns; the per-term override planned in backlog
   B2 (#41) is the escape hatch beyond suppression.
