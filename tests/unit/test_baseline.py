@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import DriftFinding
 
 
@@ -19,7 +17,6 @@ def _finding(path: Path, term: str = "widget", line: int = 1) -> DriftFinding:
     )
 
 
-@pytest.mark.xfail(strict=True)
 def test_baseline_roundtrip_and_grandfathering(tmp_path: Path) -> None:
     from disambiguate.baseline import apply_baseline, load_baseline, save_baseline
 
@@ -34,7 +31,6 @@ def test_baseline_roundtrip_and_grandfathering(tmp_path: Path) -> None:
     assert stale_keys == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_new_finding_not_in_baseline_stays_fatal(tmp_path: Path) -> None:
     from disambiguate.baseline import apply_baseline, load_baseline, save_baseline
 
@@ -49,7 +45,6 @@ def test_new_finding_not_in_baseline_stays_fatal(tmp_path: Path) -> None:
     assert [f.path for f in fresh] == [other]
 
 
-@pytest.mark.xfail(strict=True)
 def test_fixed_finding_reports_stale_baseline_key(tmp_path: Path) -> None:
     from disambiguate.baseline import apply_baseline, load_baseline, save_baseline
 
@@ -64,7 +59,6 @@ def test_fixed_finding_reports_stale_baseline_key(tmp_path: Path) -> None:
     assert len(stale_keys) == 1
 
 
-@pytest.mark.xfail(strict=True)
 def test_baseline_keys_survive_line_moves(tmp_path: Path) -> None:
     from disambiguate.baseline import apply_baseline, load_baseline, save_baseline
 
