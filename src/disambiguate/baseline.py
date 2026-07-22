@@ -10,6 +10,11 @@ does not rot.
 
 Entries are keyed by (path, rule-code, term) — never by line number — so
 they survive unrelated edits to the same file.
+
+DECISION:SCOPE — the ticket left prune mechanism open (auto-prune vs
+reported); chosen: auto-prune on a normal run, with a stderr note. The
+baseline file is `.drift-baseline.json` next to pyproject.toml (else repo
+root); regeneration is `--drift --write-baseline`.
 """
 
 from __future__ import annotations
