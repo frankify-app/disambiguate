@@ -16,7 +16,7 @@ from pathlib import Path
 from .glossary import Glossary, Term
 from .lint import walk_reachable
 from .mentions import find_mentions
-from .parser import extract_all_link_slugs
+from .parser import extract_all_link_slugs, extract_avoided_terms
 from .suppressions import (
     DriftConfig,
     FileHint,
@@ -96,6 +96,49 @@ def _check_unlinked_terms(
     return findings
 
 
+def _check_wrong_aliases(
+    glossary: Glossary, corpus: dict[Path, str]
+) -> list[DriftFinding]:
+    """
+    Report avoided-term uses where the canonical term is meant.
+
+    One finding per (document, term) at the first avoided-term mention,
+    naming the matched alias and the canonical term to use instead. A term
+    is never checked against its own defining file — the `_Avoid_:` line
+    itself names the aliases it forbids.
+    """
+    findings: list[DriftFinding] = []
+    for path in sorted(corpus):
+        text = corpus[path]
+        for slug in sorted(glossary.terms):
+            term = glossary.terms[slug]
+            if path == term.path.resolve():
+                continue
+            avoided = extract_avoided_terms(term.body)
+            if not avoided:
+                continue
+            mentions = find_mentions(text, avoided)
+            if not mentions:
+                continue
+            first = mentions[0]
+            canonical = term.canonical_name or slug
+            findings.append(
+                DriftFinding(
+                    rule_code="wrong-alias",
+                    path=path,
+                    line=first.line,
+                    term=slug,
+                    message=(
+                        f"{first.matched!r} is an avoided-term for "
+                        f"'{canonical}'; use [{canonical}]({slug}.md) "
+                        f"instead, or suppress with "
+                        f"<!-- d10e: ignore[wrong-alias] {slug} -->"
+                    ),
+                )
+            )
+    return findings
+
+
 def _read_corpus(glossary: Glossary, roots: list[Path]) -> dict[Path, str]:
     """Read every document reachable from `roots` into memory, keyed by path."""
     corpus: dict[Path, str] = {}
@@ -124,6 +167,7 @@ def run_drift_checks(
     """
     corpus = _read_corpus(glossary, roots)
     raw_findings = _check_unlinked_terms(glossary, corpus)
+    raw_findings.extend(_check_wrong_aliases(glossary, corpus))
     return _apply_suppressions(raw_findings, corpus, config)
 
 
