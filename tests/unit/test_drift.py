@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -328,3 +330,53 @@ def test_inline_hint_shadowed_by_config_is_not_stale(tmp_path: Path) -> None:
     config = DriftConfig(ignore=["unlinked-term"], ignore_paths={}, root=tmp_path)
     findings = run_drift_checks(glossary, roots=[root], config=config)
     assert findings == []
+
+
+def _aliased_project(tmp_path: Path, guide_text: str) -> tuple[Path, Path]:
+    """Glossary where `widget` forbids the synonym `gadget`."""
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(
+        glossary_dir,
+        "widget",
+        "## Widget\n\nA widget.\n\n_Avoid_: gadget, doohickey\n",
+    )
+    root = _write(tmp_path, "README", "[w](glossary/widget.md) [g](guide.md)\n")
+    _write(tmp_path, "guide", guide_text)
+    return glossary_dir, root
+
+
+@pytest.mark.xfail(strict=True)
+def test_avoided_term_use_produces_wrong_alias_finding(tmp_path: Path) -> None:
+    glossary_dir, root = _aliased_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). The gadget spins.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    wrong = [f for f in findings if f.rule_code == "wrong-alias"]
+    assert len(wrong) == 1
+    assert wrong[0].term == "widget"
+    assert "gadget" in wrong[0].message
+    assert "widget" in wrong[0].message
+
+
+def test_avoided_term_in_code_or_link_is_not_drift(tmp_path: Path) -> None:
+    glossary_dir, root = _aliased_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). Run `gadget --help` and\n"
+        "read the [gadget docs](https://example.com).\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "wrong-alias"] == []
+
+
+def test_wrong_alias_is_suppressible_inline(tmp_path: Path) -> None:
+    glossary_dir, root = _aliased_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md).\n"
+        "The gadget spins. <!-- d10e: ignore[wrong-alias] widget -->\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "wrong-alias"] == []
