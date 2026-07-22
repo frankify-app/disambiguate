@@ -401,7 +401,6 @@ def test_drift_clean_corpus_exits_zero(tmp_path: Path) -> None:
     assert stderr == ""
 
 
-@pytest.mark.xfail(strict=True)
 def test_drift_output_prints_suppression_hint_syntax(tmp_path: Path) -> None:
     project = _setup_project(tmp_path)
     (tmp_path / "README.md").write_text(
