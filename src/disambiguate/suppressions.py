@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
 
+from .parser import _FENCED_CODE_RE, _INLINE_CODE_RE
+
 # One regex per hint form. The keyword is `d10e` or `disambiguate`; the
 # rule-code is bracketed; an inline hint may carry a target term after the
 # brackets.
@@ -64,8 +66,11 @@ def parse_inline_hints(text: str) -> list[InlineHint]:
     hints.
 
     """
+    code_spans = _code_spans(text)
     hints: list[InlineHint] = []
     for match in _INLINE_HINT_RE.finditer(text):
+        if _in_spans(match.start(), match.end(), code_spans):
+            continue
         line = 1 + text.count("\n", 0, match.start())
         hints.append(
             InlineHint(
@@ -75,6 +80,20 @@ def parse_inline_hints(text: str) -> list[InlineHint]:
             )
         )
     return hints
+
+
+def _code_spans(text: str) -> list[tuple[int, int]]:
+    """Return spans of fenced code blocks and inline code spans in `text`."""
+    spans: list[tuple[int, int]] = []
+    for pattern in (_FENCED_CODE_RE, _INLINE_CODE_RE):
+        for match in pattern.finditer(text):
+            spans.append((match.start(), match.end()))
+    return spans
+
+
+def _in_spans(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
+    """Return True when [start, end) intersects any span."""
+    return any(start < span_end and end > span_start for span_start, span_end in spans)
 
 
 @dataclass(frozen=True)
@@ -174,8 +193,11 @@ def parse_file_hints(text: str) -> list[FileHint]:
     file-level opt-outs.
 
     """
+    code_spans = _code_spans(text)
     hints: list[FileHint] = []
     for match in _FILE_HINT_RE.finditer(text):
+        if _in_spans(match.start(), match.end(), code_spans):
+            continue
         line = 1 + text.count("\n", 0, match.start())
         hints.append(FileHint(line=line, rule_code=match.group("rule")))
     return hints
