@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -514,7 +512,6 @@ def test_term_case_is_suppressible_and_baselined(tmp_path: Path) -> None:
     assert fresh == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_hint_examples_inside_code_are_not_live_hints(tmp_path: Path) -> None:
     glossary_dir, root = _widget_project(
         tmp_path,
