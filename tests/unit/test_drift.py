@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -264,3 +266,70 @@ def test_load_drift_config_reads_pyproject(tmp_path: Path) -> None:
     assert config is not None
     assert config.ignore == ["unlinked-term"]
     assert config.ignore_paths == {"docs/*.md": ["term-case"]}
+
+
+@pytest.mark.xfail(strict=True)
+def test_stale_inline_hint_is_fatal_finding(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "All [widget](glossary/widget.md) uses linked.\n"
+        "<!-- d10e: ignore[unlinked-term] widget -->\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    stale = [f for f in findings if f.rule_code == "stale-suppression"]
+    assert len(stale) == 1
+    assert stale[0].line == 2
+
+
+@pytest.mark.xfail(strict=True)
+def test_stale_file_opt_out_is_fatal_finding(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "<!-- d10e: ignore-file[unlinked-term] -->\nNothing drifting here.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f.rule_code for f in findings] == ["stale-suppression"]
+
+
+@pytest.mark.xfail(strict=True)
+def test_stale_config_ignore_is_fatal_finding(tmp_path: Path) -> None:
+    from disambiguate.suppressions import DriftConfig
+
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "All [widget](glossary/widget.md) uses linked.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    config = DriftConfig(ignore=["unlinked-term"], ignore_paths={}, root=tmp_path)
+    findings = run_drift_checks(glossary, roots=[root], config=config)
+    assert [f.rule_code for f in findings] == ["stale-suppression"]
+
+
+def test_inline_hint_shadowed_by_file_opt_out_is_not_stale(tmp_path: Path) -> None:
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "<!-- d10e: ignore-file[unlinked-term] -->\n"
+        "The widget spins.\n"
+        "Fixed prose, hint below now points at nothing.\n"
+        "<!-- d10e: ignore[unlinked-term] widget -->\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "stale-suppression"] == []
+
+
+def test_inline_hint_shadowed_by_config_is_not_stale(tmp_path: Path) -> None:
+    from disambiguate.suppressions import DriftConfig
+
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "The widget spins.\n"
+        "Fixed prose, hint below now points at nothing.\n"
+        "<!-- d10e: ignore[unlinked-term] widget -->\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    config = DriftConfig(ignore=["unlinked-term"], ignore_paths={}, root=tmp_path)
+    findings = run_drift_checks(glossary, roots=[root], config=config)
+    assert findings == []
