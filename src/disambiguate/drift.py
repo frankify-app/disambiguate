@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .glossary import Glossary, Term
-from .lint import _walk_reachable
+from .lint import walk_reachable
 from .mentions import find_mentions
 from .parser import extract_all_link_slugs
 
@@ -89,7 +89,7 @@ def _check_unlinked_terms(
 def _read_corpus(glossary: Glossary, roots: list[Path]) -> dict[Path, str]:
     """Read every document reachable from `roots` into memory, keyed by path."""
     corpus: dict[Path, str] = {}
-    for path in _walk_reachable(roots, glossary):
+    for path in walk_reachable(roots, glossary):
         corpus[path] = path.read_text(encoding="utf-8")
     return corpus
 
