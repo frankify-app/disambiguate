@@ -17,7 +17,9 @@ src/disambiguate/
 ├── resolver.py              # resolve(slugs) → ordered list of Terms
 ├── renderer.py              # ordered Terms → markdown stdout
 ├── from_mode.py             # extract glossary-shaped links from a doc
-└── lint.py                  # all lint checks including reachability
+├── lint.py                  # all lint checks including reachability
+├── mentions.py              # find term-mentions in prose (masked matching)
+└── drift.py                 # drift-check engine behind --drift
 ```
 
 The runtime imports nothing outside the standard library. `argparse`,
@@ -76,6 +78,17 @@ Discover → load → run the six checks in
 the catalogue. Findings go to stderr; exit code 1 if any. Lint
 findings are diagnostics, not the tool's primary output, so they are kept
 separate from `print()`-to-stdout rendering.
+
+### `--drift`
+
+Discover → load → walk the corpus reachable from the lint roots → run the
+[drift](glossary/drift.md) checks in
+[drift.py](../src/disambiguate/drift.py) over every visited document.
+[Term-mention](glossary/term-mention.md) matching lives in
+[mentions.py](../src/disambiguate/mentions.py). Findings go to stderr with
+their [rule-code](glossary/rule-code.md); exit code 1 if any. Drift-checks
+are deliberately separate from `--lint`: lint validates the glossary,
+drift validates the prose that uses it.
 
 ## Glossary auto-discovery
 
