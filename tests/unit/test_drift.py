@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -54,6 +56,69 @@ def test_linked_once_silences_later_plain_mentions(tmp_path: Path) -> None:
         "README",
         "A [widget](glossary/widget.md) spins. Later the widget stops.\n",
     )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_mention_inside_inline_code_span_is_not_drift(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    root = _write(
+        tmp_path,
+        "README",
+        "[w](glossary/widget.md) [g](guide.md)\n",
+    )
+    _write(tmp_path, "guide", "Run the `widget` command.\n")
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_mention_inside_code_fence_is_not_drift(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    root = _write(
+        tmp_path,
+        "README",
+        "[w](glossary/widget.md) [g](guide.md)\n",
+    )
+    _write(tmp_path, "guide", "Example:\n\n```\nwidget --help\n```\n")
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_mention_inside_markdown_link_display_text_is_not_drift(
+    tmp_path: Path,
+) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    root = _write(
+        tmp_path,
+        "README",
+        "[w](glossary/widget.md) [g](guide.md)\n",
+    )
+    _write(tmp_path, "guide", "See the [widget docs](https://example.com).\n")
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
+
+
+@pytest.mark.xfail(strict=True)
+def test_mention_inside_wikilink_display_text_is_not_drift(tmp_path: Path) -> None:
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
+    _write(glossary_dir, "factory", "## Factory\n\nA factory.\n")
+    root = _write(
+        tmp_path,
+        "README",
+        "[w](glossary/widget.md) [f](glossary/factory.md) [g](guide.md)\n",
+    )
+    _write(tmp_path, "guide", "See [[factory|the widget factory]].\n")
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
