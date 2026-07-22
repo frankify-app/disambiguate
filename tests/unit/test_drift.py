@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -169,7 +167,6 @@ def _widget_project(tmp_path: Path, guide_text: str) -> tuple[Path, Path]:
     return glossary_dir, root
 
 
-@pytest.mark.xfail(strict=True)
 def test_inline_ignore_hint_on_same_line_silences_finding(tmp_path: Path) -> None:
     glossary_dir, root = _widget_project(
         tmp_path,
@@ -180,7 +177,6 @@ def test_inline_ignore_hint_on_same_line_silences_finding(tmp_path: Path) -> Non
     assert [f for f in findings if f.rule_code == "unlinked-term"] == []
 
 
-@pytest.mark.xfail(strict=True)
 def test_inline_ignore_hint_on_line_above_silences_finding(tmp_path: Path) -> None:
     glossary_dir, root = _widget_project(
         tmp_path,
