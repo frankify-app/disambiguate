@@ -115,3 +115,16 @@ def apply_baseline(
     ]
     stale_keys = sorted(baseline.keys - seen_keys)
     return fresh, stale_keys
+
+
+def prune_baseline(baseline: Baseline, stale_keys: list[str]) -> None:
+    """
+    Rewrite the baseline file without `stale_keys`.
+
+    baseline: the loaded baseline to shrink.
+    stale_keys: keys whose finding no longer occurs. The baseline can only
+        shrink under normal work — pruning never adds entries.
+    """
+    remaining = sorted(baseline.keys - set(stale_keys))
+    payload = {"version": BASELINE_VERSION, "findings": remaining}
+    baseline.path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")

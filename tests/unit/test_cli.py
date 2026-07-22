@@ -429,7 +429,6 @@ def _drifted_project(tmp_path: Path) -> Path:
     return project
 
 
-@pytest.mark.xfail(strict=True)
 def test_write_baseline_then_clean_run(tmp_path: Path) -> None:
     project = _drifted_project(tmp_path)
     code, _, _ = _run(["--drift", "--write-baseline"], project)
@@ -440,7 +439,6 @@ def test_write_baseline_then_clean_run(tmp_path: Path) -> None:
     assert "unlinked-term" not in stderr
 
 
-@pytest.mark.xfail(strict=True)
 def test_new_drift_not_in_baseline_fails(tmp_path: Path) -> None:
     project = _drifted_project(tmp_path)
     _run(["--drift", "--write-baseline"], project)
@@ -459,7 +457,6 @@ def test_new_drift_not_in_baseline_fails(tmp_path: Path) -> None:
     assert "guide.md" not in stderr
 
 
-@pytest.mark.xfail(strict=True)
 def test_baseline_auto_prunes_fixed_findings(tmp_path: Path) -> None:
     project = _drifted_project(tmp_path)
     _run(["--drift", "--write-baseline"], project)
