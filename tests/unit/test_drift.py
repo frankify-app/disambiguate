@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -22,7 +20,6 @@ def _setup_glossary(tmp_path: Path) -> Path:
     return glossary_dir
 
 
-@pytest.mark.xfail(strict=True)
 def test_unlinked_mention_produces_one_finding(tmp_path: Path) -> None:
     glossary_dir = _setup_glossary(tmp_path)
     _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
@@ -49,7 +46,6 @@ def test_unlinked_mention_produces_one_finding(tmp_path: Path) -> None:
     assert unlinked[0].line == 1
 
 
-@pytest.mark.xfail(strict=True)
 def test_linked_once_silences_later_plain_mentions(tmp_path: Path) -> None:
     glossary_dir = _setup_glossary(tmp_path)
     _write(glossary_dir, "widget", "## Widget\n\nA widget.\n")
