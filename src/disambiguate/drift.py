@@ -88,7 +88,8 @@ def _check_unlinked_terms(
                     message=(
                         f"{first.matched!r} is mentioned but never linked in "
                         f"this document; link the term once, e.g. "
-                        f"[{first.matched}]({slug}.md)"
+                        f"[{first.matched}]({slug}.md), or suppress with "
+                        f"<!-- d10e: ignore[unlinked-term] {slug} -->"
                     ),
                 )
             )
