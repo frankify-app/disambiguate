@@ -377,3 +377,40 @@ def test_wrong_alias_is_suppressible_inline(tmp_path: Path) -> None:
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
     assert [f for f in findings if f.rule_code == "wrong-alias"] == []
+
+
+def test_wrong_alias_is_suppressible_via_file_and_config(tmp_path: Path) -> None:
+    from disambiguate.suppressions import DriftConfig
+
+    glossary_dir, root = _aliased_project(
+        tmp_path,
+        "<!-- d10e: ignore-file[wrong-alias] -->\n"
+        "See the [widget](glossary/widget.md). The gadget spins.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "wrong-alias"] == []
+
+    config = DriftConfig(ignore=["wrong-alias"], ignore_paths={}, root=tmp_path)
+    findings = run_drift_checks(glossary, roots=[root], config=config)
+    assert [f for f in findings if f.rule_code == "wrong-alias"] == []
+
+
+def test_wrong_alias_participates_in_baseline(tmp_path: Path) -> None:
+    from disambiguate.baseline import apply_baseline, load_baseline, save_baseline
+
+    glossary_dir, root = _aliased_project(
+        tmp_path,
+        "See the [widget](glossary/widget.md). The gadget spins.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f.rule_code for f in findings] == ["wrong-alias"]
+
+    baseline_path = tmp_path / ".drift-baseline.json"
+    save_baseline(baseline_path, findings)
+    baseline = load_baseline(baseline_path)
+    assert baseline is not None
+    fresh, stale_keys = apply_baseline(findings, baseline)
+    assert fresh == []
+    assert stale_keys == []
