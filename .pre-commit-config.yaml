@@ -1,5 +1,5 @@
 # See https://pre-commit.com for more information
-exclude: "CHANGELOG.md|.copier-answers.agentic.yml|.all-contributorsrc|\\.agents/skills"
+exclude: "CHANGELOG.md|.copier-answers.agentic.yml|.all-contributorsrc|\\.agents/skills|\\.claude/skills"
 default_stages: [pre-commit]
 default_install_hook_types: [pre-commit, commit-msg]
 
@@ -42,6 +42,8 @@ repos:
     hooks:
       # Lint GitHub Actions workflows under .github/workflows/.
       - id: actionlint
+  # English-only: codespell's dictionaries flag ordinary words in other
+  # languages en masse, so the hook is gated on the content language.
   - repo: https://github.com/codespell-project/codespell
     rev: v2.4.2
     hooks:
@@ -73,4 +75,18 @@ repos:
         entry: uv run mypy src tests
         require_serial: true
         language: system
+        pass_filenames: false
+  - repo: local
+    hooks:
+      # Glossary lint, template-owned so repos don't need a colliding
+      # core.hooksPath setup. Pinned: disambiguate is pre-alpha and breaks
+      # between releases; the pin comes from agentic_disambiguate_version.
+      # Roots come from the agentic_disambiguate_roots answer: prek has no
+      # repo-owned env file to feed DISAMBIGUATE_ROOTS through, so answer
+      # data is the only place roots survive `copier update` unpatched.
+      - id: disambiguate-lint
+        name: disambiguate --lint
+        entry: uvx disambiguate==0.2.0 --lint
+        language: system
+        files: ^docs/glossary/
         pass_filenames: false

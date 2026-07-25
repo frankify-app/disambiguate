@@ -99,14 +99,18 @@ install_tool() {
             esac
             ;;
         prek)
-            case "$mgr" in
-                brew) brew install prek ;;
-                apt)
-                    echo "Cannot auto-install prek via apt."
-                    manual_install_hint prek
-                    return 1
-                    ;;
-            esac
+            if command -v uv >/dev/null 2>&1; then
+                uv tool install prek
+            else
+                case "$mgr" in
+                    brew) brew install prek ;;
+                    apt)
+                        echo "Cannot auto-install prek via apt (and uv is missing)."
+                        manual_install_hint prek
+                        return 1
+                        ;;
+                esac
+            fi
             ;;
         *)
             echo "No install recipe for $tool."
@@ -127,10 +131,51 @@ done
 
 
 
+# prek only bites if its git hook is installed, and hooks do not survive
+# git clone. No-op when the repo carries no prek config.
+if [[ -f .pre-commit-config.yaml ]] && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    echo
+    hook_path="$(git rev-parse --git-path hooks/pre-commit 2>/dev/null || echo .git/hooks/pre-commit)"
+    if [[ -f "$hook_path" ]]; then
+        echo "✓ prek git hook"
+        pass=$((pass + 1))
+    elif [[ "$INSTALL" == true ]] && command -v prek >/dev/null 2>&1; then
+        if prek install --install-hooks >/dev/null 2>&1; then
+            echo "✓ prek git hook (just installed)"
+            pass=$((pass + 1))
+        else
+            echo "✗ prek git hook — 'prek install' failed"
+            fail=$((fail + 1))
+        fi
+    else
+        echo "⚠ prek git hook — not installed; lint-dirty commits are not blocked (run scripts/ensure-prek.sh or doctor --install)"
+    fi
+fi
+
+# Decision-memory contract (tools/record.py + grilling skill): warn when the env var is unset;
+# when set, a cheap ls-remote surfaces bad URLs / missing credentials now
+# instead of mid-session. No clone here — session-start shallow-clone is the
+# recorder's job, per-session and ephemeral by design.
+decision_memory_failed=false
 echo
-echo "Summary: $pass ok, $fail required missing"
+if [[ -z "${DECISION_MEMORY_URL:-}" ]]; then
+    echo "⚠ DECISION_MEMORY_URL — unset; grilling skill skips decision recording. Set it (full git URL) in your shell profile (local), the environment config (remote sessions), or a CI secret."
+elif GIT_TERMINAL_PROMPT=0 git ls-remote "$DECISION_MEMORY_URL" >/dev/null 2>&1; then
+    echo "✓ DECISION_MEMORY_URL (reachable)"
+    pass=$((pass + 1))
+else
+    echo "✗ DECISION_MEMORY_URL — set but not reachable (bad URL or missing credentials): git ls-remote failed"
+    fail=$((fail + 1))
+    decision_memory_failed=true
+fi
+
+echo
+echo "Summary: $pass ok, $fail failed"
 
 if [[ ${#missing[@]} -eq 0 ]]; then
+    if [[ "$decision_memory_failed" == true ]]; then
+        exit 1
+    fi
     exit 0
 fi
 
