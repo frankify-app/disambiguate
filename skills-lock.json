@@ -32,10 +32,10 @@
       "computedHash": "e7ef25bbee50cda2eb7b3a8ef541db0a0396dad7d369f7d14fb610671dd1864b"
     },
     "grilling": {
-      "source": "mattpocock/skills",
+      "source": "frankify-app/skills",
       "sourceType": "github",
-      "skillPath": "skills/productivity/grilling/SKILL.md",
-      "computedHash": "1de9e777a60b184b29412fadacb7bbde8c14bb7037e5c4d9d086c941281d1742"
+      "skillPath": "derived/grilling/SKILL.md",
+      "computedHash": "82c8da67d4ec62ded3a4b3823b0e4678d93a0acfc22ac41180cb1b4a5f336872"
     },
     "requesting-code-review": {
       "source": "obra/superpowers",

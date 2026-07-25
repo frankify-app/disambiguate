@@ -102,6 +102,10 @@ lint.per-file-ignores."tests/**/*" = [
   "S108", # /tmp Path placeholders never touch the filesystem
 ]
 lint.per-file-ignores."tests/unit/test_dunder_main.py" = [ "S603" ]
+# Template-vendored (agentic-engineering-template) — managed duplication,
+# linted under the template's own config. Local strict-rule debt tracked in
+# frankify-app/agentic-engineering-template#55.
+lint.per-file-ignores."tools/**/*" = [ "B904", "D", "S603", "S607" ]
 lint.isort.known-first-party = [ "tests" ]
 
 [tool.pyproject-fmt]

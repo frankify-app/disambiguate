@@ -1,0 +1,127 @@
+name: Template Update
+
+on:
+  schedule:
+    # Weekly, off the top of the hour to dodge GitHub's cron stampede.
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+# The workflow only acts through the release-bot app token minted below —
+# the default GITHUB_TOKEN would open PRs that trigger no CI, silently
+# skipping the checks that flag copier conflict markers for resolution.
+permissions: {}
+
+concurrency:
+  group: template-update
+
+jobs:
+  update:
+    name: "copier update (agentic template)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint release-bot installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
+      - name: Skip if an update PR is already open
+        id: dedupe
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          open_prs="$(gh pr list --state open --json headRefName \
+            --jq '[.[].headRefName | select(startswith("chore/template-update-"))] | length')"
+          if [ "$open_prs" -gt 0 ]; then
+            echo "An update PR is already open ($open_prs) — skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        if: steps.dedupe.outputs.skip == 'false'
+        with:
+          # Push the update branch as the app so the resulting PR runs CI.
+          token: ${{ steps.app-token.outputs.token }}
+          fetch-depth: 0
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+        if: steps.dedupe.outputs.skip == 'false'
+
+      - name: Run copier update against the latest template tag
+        if: steps.dedupe.outputs.skip == 'false'
+        id: update
+        run: |
+          set -euo pipefail
+          answers_file=".copier-answers.agentic.yml"
+          old_ref="$(awk '$1 == "_commit:" {print $2}' "$answers_file")"
+
+          # --skip-tasks: post-tasks (doctor.sh, skills install, prek) need
+          # host tools absent on runners; the consuming repo already ran them.
+          # copier-template-extensions is required to load the template's
+          # Jinja extensions.
+          uvx --with copier-template-extensions copier update \
+            --answers-file "$answers_file" \
+            --defaults --trust --skip-tasks
+
+          new_ref="$(awk '$1 == "_commit:" {print $2}' "$answers_file")"
+          {
+            echo "old_ref=$old_ref"
+            echo "new_ref=$new_ref"
+          } >> "$GITHUB_OUTPUT"
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Already up to date ($old_ref) — nothing to do."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open update PR
+        if: steps.dedupe.outputs.skip == 'false' && steps.update.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OLD_REF: ${{ steps.update.outputs.old_ref }}
+          NEW_REF: ${{ steps.update.outputs.new_ref }}
+        run: |
+          set -euo pipefail
+          branch="chore/template-update-$NEW_REF"
+
+          git config user.name "release-bot[bot]"
+          git config user.email "release-bot[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          # Conflicts are committed as copier's inline markers on purpose:
+          # the PR opens either way and red CI flags them for resolution on
+          # the branch, so updates never silently stall.
+          git add -A
+          git commit -m "chore: update agentic template $OLD_REF -> $NEW_REF"
+          git push -u origin "$branch"
+
+          # Changelog excerpt from the template's GitHub Release for the new
+          # tag. Best-effort: a missing release only degrades the PR body.
+          src_path="$(awk '$1 == "_src_path:" {print $2}' .copier-answers.agentic.yml)"
+          template_repo="${src_path#gh:}"
+          template_repo="${template_repo#https://github.com/}"
+          template_repo="${template_repo%.git}"
+          changelog="$(gh release view "$NEW_REF" --repo "$template_repo" \
+            --json body --jq .body \
+            || echo "_No release notes found for $NEW_REF in $template_repo._")"
+
+          {
+            echo "Automated \`copier update\` of the agentic template: \`$OLD_REF\` -> \`$NEW_REF\`."
+            echo
+            echo "If CI is red, the update hit merge conflicts — resolve copier's inline conflict markers on this branch."
+            echo
+            echo "## Template changelog ($NEW_REF)"
+            echo
+            echo "$changelog"
+          } > /tmp/pr-body.md
+
+          gh pr create \
+            --title "chore: update agentic template to $NEW_REF" \
+            --body-file /tmp/pr-body.md \
+            --head "$branch"

@@ -1,0 +1,46 @@
+name: Lint
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Rendered even when agentic_precommit is 'none': the marker check guards
+  # the template-updater contract (committed copier conflict markers must
+  # turn CI red), not the hook configuration.
+  conflict-markers:
+    name: "conflict markers (template updates)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      # template-update PRs commit copier's inline conflict markers on
+      # purpose so red CI flags them for human/agent resolution.
+      - name: Check for conflict markers
+        run: |
+          set -euo pipefail
+          if git grep -nE '^(<{7}|={7}$|>{7})' -- ':!.agents/skills'; then
+            echo "::error::Conflict markers found — resolve copier's inline markers on this branch (see the template-update PR body)."
+            exit 1
+          fi
+
+  prek:
+    name: "prek (all hooks, all files)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      # prek bootstraps hook runtimes (node for markdownlint/commitlint,
+      # go for actionlint) itself; uvx provides prek.
+      - name: Run prek hooks
+        run: uvx prek run --all-files --show-diff-on-failure

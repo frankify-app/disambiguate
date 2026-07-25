@@ -1,11 +1,16 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: 57af2d2
+_commit: v2.0.0-9-g576dd98
 _src_path: https://github.com/frankify-app/agentic-engineering-template
+agentic_disambiguate_roots: ''
+agentic_disambiguate_version: 0.2.0
 agentic_forge: github
+agentic_language: en
 agentic_precommit: prek
 agentic_project_description: Resolve project terminology into a topologically ordered
     glossary.
+agentic_project_kind: code
 agentic_project_name: Disambiguate
 agentic_project_slug: disambiguate
 agentic_repo_owner: frankify-app
+agentic_subtemplate: template
 agentic_tracker_cli: gh
