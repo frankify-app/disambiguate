@@ -55,3 +55,16 @@ def test_publish_workflow_downloads_only_python_distributions() -> None:
     assert "*.whl" in workflow
     assert "*.tar.gz" in workflow
     assert "claude-bundle" not in workflow
+
+
+def test_changelog_carries_semantic_release_insertion_flag() -> None:
+    """
+    CHANGELOG.md must contain the insertion flag semantic-release writes at.
+
+    `changelog.mode` defaults to `update`, which inserts new sections at this
+    flag and silently no-ops without it — five releases shipped no notes that
+    way (#50).
+    """
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+
+    assert "<!-- version list -->" in changelog
