@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 
 from .glossary import Glossary
-from .parser import extract_all_link_slugs
+from .parser import extract_all_link_refs
 
 logger = logging.getLogger(__name__)
 
@@ -56,12 +56,14 @@ def extract_slugs(
     ordered: list[str] = []
     broken: list[str] = []
 
-    for slug in extract_all_link_slugs(text):
+    for slug, path in extract_all_link_refs(text):
         if slug in glossary.terms:
             if slug not in seen:
                 seen.add(slug)
                 ordered.append(slug)
         elif source_path is None:
+            broken.append(slug)
+        elif path is not None and not (source_path.parent / path).is_file():
             broken.append(slug)
 
     if broken:

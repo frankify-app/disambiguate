@@ -110,7 +110,6 @@ def test_link_to_existing_non_glossary_doc_is_ignored(tmp_path: Path) -> None:
     assert slugs == ["a"]
 
 
-@pytest.mark.xfail(strict=True)
 def test_dangling_md_link_raises_even_with_source_path(tmp_path: Path) -> None:
     """
     A `.md` link that resolves to no file stays a loud error.
