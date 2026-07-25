@@ -93,3 +93,46 @@ def test_broken_slug_behind_display_text_fails() -> None:
     text = "[[ghost|friendly name]]"
     with pytest.raises(BrokenFromLinkError, match="ghost"):
         extract_slugs(text, _glossary("a"))
+
+
+def test_link_to_existing_non_glossary_doc_is_ignored(tmp_path: Path) -> None:
+    """
+    Kata for #45: existing non-glossary link targets are document links.
+
+    A `.md` link that resolves to a real file outside the glossary must not
+    be classified as a broken glossary reference.
+    """
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    source = tmp_path / "README.md"
+    text = "See [a](a.md) and [the changelog](CHANGELOG.md).\n"
+    source.write_text(text, encoding="utf-8")
+    slugs = extract_slugs(text, _glossary("a"), source_path=source)
+    assert slugs == ["a"]
+
+
+def test_dangling_md_link_raises_even_with_source_path(tmp_path: Path) -> None:
+    """
+    A `.md` link that resolves to no file stays a loud error.
+
+    The source_path escape hatch must not swallow genuinely broken
+    references.
+    """
+    source = tmp_path / "README.md"
+    text = "See [a](a.md) and [ghost](ghost.md).\n"
+    source.write_text(text, encoding="utf-8")
+    with pytest.raises(BrokenFromLinkError):
+        extract_slugs(text, _glossary("a"), source_path=source)
+
+
+def test_unknown_wikilink_raises_even_with_source_path(tmp_path: Path) -> None:
+    """
+    An unknown wikilink stays a loud error even with a source path.
+
+    Wikilinks address terms by slug and carry no filesystem path, so there
+    is nothing to resolve against.
+    """
+    source = tmp_path / "README.md"
+    text = "[[a]] and [[ghost]]\n"
+    source.write_text(text, encoding="utf-8")
+    with pytest.raises(BrokenFromLinkError):
+        extract_slugs(text, _glossary("a"), source_path=source)

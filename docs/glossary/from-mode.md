@@ -12,9 +12,15 @@ Link classification:
 
 - A link whose basename matches a slug in the active glossary is treated as
   a request for that term.
-- A glossary-shaped link with a broken slug — basename ending in `.md` but
-  not matching any term — is an error. From-mode does not silently ignore
+- A `.md` link whose basename matches no term is resolved against the
+  source document when `--from` was given a real path: if the link's path
+  points at an existing file, it is a document link and is ignored — the
+  same classification the [lint](lint.md) reachability walk applies. If it
+  points at nothing, it is an error. From-mode does not silently ignore
   unresolvable references.
+- On standard input there is no base path to resolve against, so every
+  `.md` link whose basename matches no term is an error. Unknown wikilinks
+  are always an error — they address terms by slug and carry no path.
 - Non-glossary links (external URLs, image paths, links to non-`.md` files)
   are silently ignored.
 

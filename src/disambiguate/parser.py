@@ -149,30 +149,47 @@ def extract_malformed_wikilinks(text: str) -> list[str]:
     return malformed
 
 
-def extract_all_link_slugs(text: str) -> list[str]:
+def extract_all_link_refs(text: str) -> list[tuple[str, str | None]]:
     """
-    Return the slugs of every cross-reference in document order.
+    Return every cross-reference in document order as (slug, path) pairs.
 
     Both standard markdown links to `.md` files (basename-resolved) and
     wiki-style `[[slug]]` links are collected. URLs and code-block contents
     are excluded. Duplicates are preserved — callers de-duplicate where
     they need to.
+
+    Returns
+    -------
+    Pairs of (slug, raw link path). The path is the verbatim markdown link
+    target for standard links, and None for wikilinks — wikilinks address
+    terms by slug and carry no filesystem path.
+
     """
     code_stripped = _strip_code(text)
 
     # Walk both regexes and interleave by document position so duplicates
     # from the two syntaxes appear in source order.
-    matches: list[tuple[int, str]] = []
+    matches: list[tuple[int, str, str | None]] = []
     for match in _MD_LINK_RE.finditer(code_stripped):
         path = match.group(1)
         if _is_url(path):
             continue
-        matches.append((match.start(), _path_basename_slug(path)))
+        matches.append((match.start(), _path_basename_slug(path), path))
     for match in _WIKILINK_RE.finditer(code_stripped):
-        matches.append((match.start(), match.group(1)))
+        matches.append((match.start(), match.group(1), None))
 
-    matches.sort(key=lambda pair: pair[0])
-    return [slug for _, slug in matches]
+    matches.sort(key=lambda triple: triple[0])
+    return [(slug, path) for _, slug, path in matches]
+
+
+def extract_all_link_slugs(text: str) -> list[str]:
+    """
+    Return the slugs of every cross-reference in document order.
+
+    Path-free view of `extract_all_link_refs` — same extraction, same
+    ordering and duplicate semantics.
+    """
+    return [slug for slug, _ in extract_all_link_refs(text)]
 
 
 def parse_term_text(slug: str, text: str) -> ParsedTerm:

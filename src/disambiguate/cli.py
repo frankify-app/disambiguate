@@ -224,7 +224,10 @@ def _run_default(glossary: Glossary, slugs: list[str]) -> int:
 def _run_from(glossary: Glossary, from_doc: str) -> int:
     """Extract slugs from a document and resolve them."""
     text = _read_from_doc(from_doc)
-    slugs = extract_slugs(text, glossary)
+    # A real file gets resolve-then-classify for its document links;
+    # stdin (`-`) has no base path, so classification stays basename-only.
+    source_path = None if from_doc == "-" else Path(from_doc)
+    slugs = extract_slugs(text, glossary, source_path=source_path)
     terms = resolve(glossary, slugs)
     print(render_terms(terms), end="")
     return EXIT_OK

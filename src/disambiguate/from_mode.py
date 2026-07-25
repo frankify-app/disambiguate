@@ -10,9 +10,10 @@ error so the user notices broken references in their prose.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from .glossary import Glossary
-from .parser import extract_all_link_slugs
+from .parser import extract_all_link_refs
 
 logger = logging.getLogger(__name__)
 
@@ -21,13 +22,21 @@ class BrokenFromLinkError(Exception):
     """A glossary-shaped link in the source document references an unknown slug."""
 
 
-def extract_slugs(text: str, glossary: Glossary) -> list[str]:
+def extract_slugs(
+    text: str, glossary: Glossary, source_path: Path | None = None
+) -> list[str]:
     """
     Return the slugs referenced by `text`, preserving order, without duplicates.
 
     text: a markdown document.
     glossary: the active glossary; used to validate slugs and to distinguish
         glossary-shaped links from arbitrary `.md` links.
+    source_path: filesystem location of `text`, when it has one. Enables
+        resolve-then-classify: a `.md` link whose basename is no glossary
+        slug is a document link, not a broken reference, when its path
+        resolves to an existing file relative to the source document —
+        the same classification the lint reachability walk applies. None
+        (e.g. stdin) keeps basename-only classification.
 
     Returns
     -------
@@ -47,12 +56,17 @@ def extract_slugs(text: str, glossary: Glossary) -> list[str]:
     ordered: list[str] = []
     broken: list[str] = []
 
-    for slug in extract_all_link_slugs(text):
+    for slug, path in extract_all_link_refs(text):
         if slug in glossary.terms:
             if slug not in seen:
                 seen.add(slug)
                 ordered.append(slug)
-        else:
+        elif source_path is None or path is None:
+            # No base path to resolve against (stdin), or a wikilink —
+            # wikilinks address terms by slug and carry no filesystem
+            # path, so basename-only classification is all there is.
+            broken.append(slug)
+        elif not (source_path.parent / path).is_file():
             broken.append(slug)
 
     if broken:

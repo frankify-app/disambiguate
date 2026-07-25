@@ -354,3 +354,24 @@ def test_dogfood_lint_passes_against_project_glossary() -> None:
     project_root = Path(__file__).resolve().parents[2]
     code, _, stderr = _run(["--lint"], project_root)
     assert code == 0, f"dogfood lint failed: {stderr}"
+
+
+def test_from_file_ignores_links_to_existing_non_glossary_docs(
+    tmp_path: Path,
+) -> None:
+    """
+    Kata for #45 at the CLI layer: `--from` passes the source path.
+
+    Doc-to-doc links (README → CHANGELOG.md) must be classified as document
+    links, not broken glossary references.
+    """
+    project = _setup_project(tmp_path)
+    (project / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    readme = project / "README.md"
+    readme.write_text(
+        "[a](docs/glossary/a.md) and [changes](CHANGELOG.md)\n",
+        encoding="utf-8",
+    )
+    code, out, err = _run(["--from", "README.md"], cwd=project)
+    assert code == 0, err
+    assert "## A" in out
