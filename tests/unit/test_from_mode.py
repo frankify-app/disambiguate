@@ -95,7 +95,6 @@ def test_broken_slug_behind_display_text_fails() -> None:
         extract_slugs(text, _glossary("a"))
 
 
-@pytest.mark.xfail(strict=True)
 def test_link_to_existing_non_glossary_doc_is_ignored(tmp_path: Path) -> None:
     """
     Kata for #45: existing non-glossary link targets are document links.

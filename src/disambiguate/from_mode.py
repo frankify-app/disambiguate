@@ -61,7 +61,7 @@ def extract_slugs(
             if slug not in seen:
                 seen.add(slug)
                 ordered.append(slug)
-        else:
+        elif source_path is None:
             broken.append(slug)
 
     if broken:
