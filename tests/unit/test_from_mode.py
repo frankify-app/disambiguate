@@ -108,3 +108,18 @@ def test_link_to_existing_non_glossary_doc_is_ignored(tmp_path: Path) -> None:
     source.write_text(text, encoding="utf-8")
     slugs = extract_slugs(text, _glossary("a"), source_path=source)
     assert slugs == ["a"]
+
+
+@pytest.mark.xfail(strict=True)
+def test_dangling_md_link_raises_even_with_source_path(tmp_path: Path) -> None:
+    """
+    A `.md` link that resolves to no file stays a loud error.
+
+    The source_path escape hatch must not swallow genuinely broken
+    references.
+    """
+    source = tmp_path / "README.md"
+    text = "See [a](a.md) and [ghost](ghost.md).\n"
+    source.write_text(text, encoding="utf-8")
+    with pytest.raises(BrokenFromLinkError):
+        extract_slugs(text, _glossary("a"), source_path=source)
