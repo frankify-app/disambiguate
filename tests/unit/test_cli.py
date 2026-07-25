@@ -356,7 +356,6 @@ def test_dogfood_lint_passes_against_project_glossary() -> None:
     assert code == 0, f"dogfood lint failed: {stderr}"
 
 
-@pytest.mark.xfail(strict=True)
 def test_from_file_ignores_links_to_existing_non_glossary_docs(
     tmp_path: Path,
 ) -> None:
