@@ -23,13 +23,13 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/grill-me/SKILL.md",
-      "computedHash": "f321507f77702a54af1db66549ec1685fc625390d06c57d7949cdcda8eb1b5c7"
+      "computedHash": "f361db4e15e6bfd562a9282b1dccda513910a50061f9e838ce017be9c69dde3f"
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/grill-with-docs/SKILL.md",
-      "computedHash": "e7ef25bbee50cda2eb7b3a8ef541db0a0396dad7d369f7d14fb610671dd1864b"
+      "computedHash": "9c460cbd94fd3c63cdef967dbdb6e66ca687103cdc380cd37834e4d10b738f78"
     },
     "grilling": {
       "source": "frankify-app/skills",
@@ -41,13 +41,13 @@
       "source": "obra/superpowers",
       "sourceType": "github",
       "skillPath": "skills/requesting-code-review/SKILL.md",
-      "computedHash": "cde520e9118d7e6b74b5ab0123cff2f68d9c07bddb3f82c997753b6126600aed"
+      "computedHash": "2304d2073c62eab163e04de40fe775e3d87c69c0df40cd4dc953fdb8e3205b81"
     },
     "tdd": {
       "source": "frankify-app/skills",
       "sourceType": "github",
       "skillPath": "derived/tdd/SKILL.md",
-      "computedHash": "b663ec89bd4d0babc7572eb39ce21fe56a95c6da9d74149a17ce93b7c4906253"
+      "computedHash": "d77f0ecda1ec673c16f342a2e16b6ac3388d1004908e4352b4f57cffe701aa97"
     },
     "to-spec": {
       "source": "frankify-app/skills",

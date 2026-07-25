@@ -46,10 +46,30 @@ The first slice is a tracer bullet: it proves the path works end to end.
 
 One behavior = one RED commit + one GREEN commit. Multiple cycles per branch is fine; prefer one cycle in flight in Go/Rust repos (see markers).
 
+**Every commit — RED included — leaves the tree lint-clean.** After each
+commit, run the repo's full hook suite over the whole tree (e.g.
+`prek run --all-files`): exit code 0 and no files modified. An auto-fixer
+changing files IS a failure — apply the fix and amend it into the commit that
+introduced the problem before starting the next cycle. CI evaluating only the
+PR head never excuses a dirty intermediate commit; per-commit hygiene is
+verified here, at commit time, or not at all.
+
+### STUB commit (only when the RED test needs a missing API surface)
+
+A RED commit is red on **tests only**: lint, format, and type checks still
+pass on it. When the new test calls a function, method, or parameter that does
+not exist yet, type checking would fail — so first commit a minimal
+signature-only stub as its own commit, prefix `chore(stub):`. Signature +
+docstring, zero behavior: a new callable raises `NotImplementedError`; a new
+parameter is accepted and ignored. This is the one sanctioned exception to the
+Iron Law: a stub defines *interface*, and must contain no *implementation* —
+any logic in a stub commit is production code without a failing test. Skip
+this step entirely when the surface already exists.
+
 ### RED commit
 
 - Write one failing test. One behavior, clear name, real code — no mocks unless unavoidable.
-- Run it *unmarked*; watch it fail for the **right reason** (feature missing — not a typo or import error). Passes immediately? It tests existing behavior — fix the test.
+- Run it *unmarked*; watch it fail for the **right reason** (feature missing — behavior wrong, assertion fails, or the stub's `NotImplementedError` — never a typo, import error, or missing symbol). Passes immediately? It tests existing behavior — fix the test.
 - Add the marker (below), suite green, commit. Tests only, prefix `test(red):`.
 
 | Language | Marker | Strict? |
@@ -79,7 +99,7 @@ After all tests pass, look for [refactor candidates](refactoring.md):
 
 `lint-red.sh` (ships with skill; wire into prek + CI): `staged`/`commit` modes check that `test(red):` commits touch only test files and add a marker, others add none; `merge` mode rejects any markers in tree; if Go/Rust markers are present, a `red-tests` job must exist.
 
-Hooks verify commit *structure* and marker hygiene. They do **not** verify you ran the unmarked test and watched it fail for the right reason — that stays on you. Strict markers partially compensate (XPASS catches tests of already-existing behavior). "Lint passed" ≠ "TDD verified."
+Hooks verify commit *structure* and marker hygiene. They do **not** verify you ran the unmarked test and watched it fail for the right reason — that stays on you. Same for per-commit lint: an installed pre-commit hook blocks dirty commits at commit time, but where no hook is installed (fresh remote environments), the after-every-commit `--all-files` run is manual discipline — do it anyway. Strict markers partially compensate (XPASS catches tests of already-existing behavior). "Lint passed" ≠ "TDD verified."
 
 ## Good tests
 
