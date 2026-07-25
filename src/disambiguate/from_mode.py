@@ -10,6 +10,7 @@ error so the user notices broken references in their prose.
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 
 from .glossary import Glossary
 from .parser import extract_all_link_slugs
@@ -21,13 +22,21 @@ class BrokenFromLinkError(Exception):
     """A glossary-shaped link in the source document references an unknown slug."""
 
 
-def extract_slugs(text: str, glossary: Glossary) -> list[str]:
+def extract_slugs(
+    text: str, glossary: Glossary, source_path: Path | None = None
+) -> list[str]:
     """
     Return the slugs referenced by `text`, preserving order, without duplicates.
 
     text: a markdown document.
     glossary: the active glossary; used to validate slugs and to distinguish
         glossary-shaped links from arbitrary `.md` links.
+    source_path: filesystem location of `text`, when it has one. Enables
+        resolve-then-classify: a `.md` link whose basename is no glossary
+        slug is a document link, not a broken reference, when its path
+        resolves to an existing file relative to the source document —
+        the same classification the lint reachability walk applies. None
+        (e.g. stdin) keeps basename-only classification.
 
     Returns
     -------

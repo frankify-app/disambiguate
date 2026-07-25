@@ -93,3 +93,19 @@ def test_broken_slug_behind_display_text_fails() -> None:
     text = "[[ghost|friendly name]]"
     with pytest.raises(BrokenFromLinkError, match="ghost"):
         extract_slugs(text, _glossary("a"))
+
+
+@pytest.mark.xfail(strict=True)
+def test_link_to_existing_non_glossary_doc_is_ignored(tmp_path: Path) -> None:
+    """
+    Kata for #45: existing non-glossary link targets are document links.
+
+    A `.md` link that resolves to a real file outside the glossary must not
+    be classified as a broken glossary reference.
+    """
+    (tmp_path / "CHANGELOG.md").write_text("# Changelog\n", encoding="utf-8")
+    source = tmp_path / "README.md"
+    text = "See [a](a.md) and [the changelog](CHANGELOG.md).\n"
+    source.write_text(text, encoding="utf-8")
+    slugs = extract_slugs(text, _glossary("a"), source_path=source)
+    assert slugs == ["a"]
