@@ -122,3 +122,18 @@ def test_dangling_md_link_raises_even_with_source_path(tmp_path: Path) -> None:
     source.write_text(text, encoding="utf-8")
     with pytest.raises(BrokenFromLinkError):
         extract_slugs(text, _glossary("a"), source_path=source)
+
+
+@pytest.mark.xfail(strict=True)
+def test_unknown_wikilink_raises_even_with_source_path(tmp_path: Path) -> None:
+    """
+    An unknown wikilink stays a loud error even with a source path.
+
+    Wikilinks address terms by slug and carry no filesystem path, so there
+    is nothing to resolve against.
+    """
+    source = tmp_path / "README.md"
+    text = "[[a]] and [[ghost]]\n"
+    source.write_text(text, encoding="utf-8")
+    with pytest.raises(BrokenFromLinkError):
+        extract_slugs(text, _glossary("a"), source_path=source)
