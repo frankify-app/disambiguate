@@ -124,7 +124,6 @@ def test_dangling_md_link_raises_even_with_source_path(tmp_path: Path) -> None:
         extract_slugs(text, _glossary("a"), source_path=source)
 
 
-@pytest.mark.xfail(strict=True)
 def test_unknown_wikilink_raises_even_with_source_path(tmp_path: Path) -> None:
     """
     An unknown wikilink stays a loud error even with a source path.

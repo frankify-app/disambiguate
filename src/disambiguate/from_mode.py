@@ -61,9 +61,12 @@ def extract_slugs(
             if slug not in seen:
                 seen.add(slug)
                 ordered.append(slug)
-        elif source_path is None:
+        elif source_path is None or path is None:
+            # No base path to resolve against (stdin), or a wikilink —
+            # wikilinks address terms by slug and carry no filesystem
+            # path, so basename-only classification is all there is.
             broken.append(slug)
-        elif path is not None and not (source_path.parent / path).is_file():
+        elif not (source_path.parent / path).is_file():
             broken.append(slug)
 
     if broken:
