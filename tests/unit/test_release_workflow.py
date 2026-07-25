@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[2]
 RELEASE_WORKFLOW = ROOT / ".github" / "workflows" / "release.yml"
 PUBLISH_WORKFLOW = ROOT / ".github" / "workflows" / "publish.yml"
@@ -59,7 +57,6 @@ def test_publish_workflow_downloads_only_python_distributions() -> None:
     assert "claude-bundle" not in workflow
 
 
-@pytest.mark.xfail(strict=True)
 def test_changelog_carries_semantic_release_insertion_flag() -> None:
     """
     CHANGELOG.md must contain the insertion flag semantic-release writes at.
