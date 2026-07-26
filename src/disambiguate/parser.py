@@ -30,12 +30,15 @@ class ParsedTerm:
     link_slugs: cross-reference targets, in document order, duplicates preserved.
         External URLs, non-`.md` links, and links inside any kind of code are
         excluded.
+    auto_prune: the term declares that it may be removed once nothing
+        links it. Absent marker means no consent.
     """
 
     slug: str
     canonical_name: str | None
     body: str
     link_slugs: list[str]
+    auto_prune: bool = False
 
 
 _FENCED_CODE_RE = re.compile(
