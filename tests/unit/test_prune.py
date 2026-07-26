@@ -81,9 +81,6 @@ def test_all_orphans_widens_scope_to_terms_that_never_consented(
     assert widened.additional == []
 
 
-@pytest.mark.xfail(
-    strict=True, reason="red: consent is decided per term, not per branch"
-)
 def test_a_surviving_orphan_keeps_the_terms_it_links(tmp_path: Path) -> None:
     """
     A term linked by one that stays is in the same orphaned branch.
@@ -161,32 +158,12 @@ def chain(consents: tuple[bool, ...]) -> dict[str, str]:
     ("consents", "pruned"),
     [
         ((False, False), False),
-        pytest.param(
-            (True, False),
-            False,
-            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
-        ),
-        pytest.param(
-            (False, True),
-            False,
-            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
-        ),
+        ((True, False), False),
+        ((False, True), False),
         ((True, True), True),
-        pytest.param(
-            (False, True, True),
-            False,
-            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
-        ),
-        pytest.param(
-            (True, False, True),
-            False,
-            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
-        ),
-        pytest.param(
-            (True, True, False),
-            False,
-            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
-        ),
+        ((False, True, True), False),
+        ((True, False, True), False),
+        ((True, True, False), False),
         ((True, True, True), True),
     ],
     ids=[
@@ -235,7 +212,6 @@ def test_all_orphans_removes_every_orphan_regardless_of_consent(
     assert plan.additional == []
 
 
-@pytest.mark.xfail(strict=True, reason="red: both no-op causes read the same")
 def test_dry_run_distinguishes_no_orphans_from_protected_orphans(
     tmp_path: Path,
 ) -> None:

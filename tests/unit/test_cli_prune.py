@@ -175,16 +175,8 @@ def test_all_orphans_deletes_the_whole_chain(
     ("consents", "pruned"),
     [
         ((False, False), False),
-        pytest.param(
-            (True, False),
-            False,
-            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
-        ),
-        pytest.param(
-            (False, True),
-            False,
-            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
-        ),
+        ((True, False), False),
+        ((False, True), False),
         ((True, True), True),
     ],
     ids=["nc-nc", "c-nc", "nc-c", "c-c"],

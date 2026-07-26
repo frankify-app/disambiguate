@@ -29,8 +29,9 @@ class PrunePlan:
     """
     What a prune run would remove.
 
-    remove: slugs to remove now — orphaned, and consenting unless the
-        caller widened the scope.
+    remove: slugs to remove now — every term of an orphaned branch
+        that consents, or simply orphaned when the caller widened the
+        scope.
     additional: slugs `--all-orphans` would remove on top of `remove`;
         empty when the scope is already widened.
     """
@@ -61,14 +62,63 @@ def plan_prune(
     if all_orphans:
         return PrunePlan(remove=list(orphans), additional=[])
 
-    # DECISION: single pass, not a fixpoint loop. Orphanhood is
-    # reachability from the roots, so a reachable term's whole path is
-    # reachable too — removing orphans can never orphan a term the roots
-    # still reach. The orphan set is already its own fixpoint, which
-    # settles the question #52 left open.
-    remove = [slug for slug in orphans if glossary.terms[slug].auto_prune]
+    # DECISION: consent is decided per orphaned BRANCH, not per term. A
+    # branch goes only when every term in it consents; one
+    # non-consenting term anywhere keeps all of it.
+    #
+    # Branches are connected components, traversed without regard to
+    # link direction. Direction would let `consenting -> non-consenting`
+    # delete the consenting end, and that case is the one most worth
+    # keeping: a consenting term pointing at a non-consenting orphan is
+    # most likely a MISSING inbound link, and the consenting term is the
+    # context someone needs to fix it. Deleting the context to tidy the
+    # report destroys the evidence.
+    #
+    # This is the authoritative home for that reasoning.
+    # docs/glossary/prune.md states the resulting behavior for readers of
+    # the vocabulary and points here rather than restating it; the two
+    # change together.
+    remove: list[str] = []
+    for branch in _branches(glossary, orphans):
+        if all(glossary.terms[slug].auto_prune for slug in branch):
+            remove.extend(branch)
+    remove.sort()
     additional = [slug for slug in orphans if slug not in set(remove)]
     return PrunePlan(remove=remove, additional=additional)
+
+
+def _branches(glossary: Glossary, orphans: list[str]) -> list[list[str]]:
+    """
+    Group `orphans` into connected components, ignoring link direction.
+
+    Only orphan-to-orphan links join a component: a link to a term the
+    roots still reach says nothing about the orphan's own fate, and no
+    reachable term can link an orphan without making it reachable.
+    """
+    candidates = set(orphans)
+    neighbours: dict[str, set[str]] = {slug: set() for slug in candidates}
+    for slug in candidates:
+        for target in glossary.terms[slug].link_slugs:
+            if target in candidates and target != slug:
+                neighbours[slug].add(target)
+                neighbours[target].add(slug)
+
+    seen: set[str] = set()
+    components: list[list[str]] = []
+    for slug in orphans:
+        if slug in seen:
+            continue
+        component: list[str] = []
+        queue = [slug]
+        while queue:
+            current = queue.pop()
+            if current in seen:
+                continue
+            seen.add(current)
+            component.append(current)
+            queue.extend(neighbours[current] - seen)
+        components.append(sorted(component))
+    return components
 
 
 def apply_prune(plan: PrunePlan, glossary: Glossary) -> list[Path]:
@@ -100,8 +150,13 @@ def format_dry_run(plan: PrunePlan) -> str:
     if plan.remove:
         lines.append(f"Would remove {len(plan.remove)} orphaned term(s):")
         lines.extend(f"  - {slug}" for slug in plan.remove)
+    elif plan.additional:
+        lines.append(
+            "Nothing to remove: every orphaned branch holds a term that never "
+            "consented."
+        )
     else:
-        lines.append("Nothing to remove: no orphaned term consents to pruning.")
+        lines.append("Nothing to remove: the glossary has no orphaned terms.")
 
     if plan.additional:
         lines.append("")
