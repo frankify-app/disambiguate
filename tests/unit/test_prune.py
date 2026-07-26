@@ -56,3 +56,47 @@ def test_prune_removes_consenting_orphans_and_spares_linked_ones(
 
     assert plan.remove == ["unlinked"]
     assert plan.additional == []
+
+
+def test_all_orphans_widens_scope_to_terms_that_never_consented(
+    tmp_path: Path,
+) -> None:
+    """Without the flag, a non-consenting orphan is only reported."""
+    glossary, roots = build(
+        tmp_path,
+        {
+            "consenting": f"## Consenting\n\n{CONSENT}\n\nOpted in.\n",
+            "silent": "## Silent\n\nNever opted in.\n",
+        },
+    )
+
+    default = plan_prune(glossary, roots)
+    assert default.remove == ["consenting"]
+    assert default.additional == ["silent"]
+
+    widened = plan_prune(glossary, roots, all_orphans=True)
+    assert widened.remove == ["consenting", "silent"]
+    assert widened.additional == []
+
+
+def test_removing_orphans_cannot_orphan_a_surviving_term(tmp_path: Path) -> None:
+    """
+    The cascade #52 worried about cannot happen.
+
+    Orphanhood is reachability from the roots, so a reachable term's
+    whole path is reachable. `deep` is reachable via `hub`, and neither
+    is touched even though `island` — which also links `deep` — goes.
+    """
+    glossary, roots = build(
+        tmp_path,
+        {
+            "hub": "## Hub\n\nLinks [deep](deep.md).\n",
+            "deep": "## Deep\n\nReachable through hub.\n",
+            "island": f"## Island\n\n{CONSENT}\n\nAlso links [deep](deep.md).\n",
+        },
+        readme="See [hub](docs/glossary/hub.md).\n",
+    )
+
+    plan = plan_prune(glossary, roots)
+
+    assert plan.remove == ["island"]
