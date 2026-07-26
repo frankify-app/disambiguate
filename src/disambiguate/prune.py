@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from disambiguate.glossary import Glossary
+from disambiguate.lint import orphan_slugs
 
 
 @dataclass(frozen=True)
@@ -53,4 +54,15 @@ def plan_prune(
     A PrunePlan. Pure — reads the graph, touches no files.
 
     """
-    raise NotImplementedError
+    orphans = orphan_slugs(glossary, roots)
+    if all_orphans:
+        return PrunePlan(remove=list(orphans), additional=[])
+
+    # DECISION: single pass, not a fixpoint loop. Orphanhood is
+    # reachability from the roots, so a reachable term's whole path is
+    # reachable too — removing orphans can never orphan a term the roots
+    # still reach. The orphan set is already its own fixpoint, which
+    # settles the question #52 left open.
+    remove = [slug for slug in orphans if glossary.terms[slug].auto_prune]
+    additional = [slug for slug in orphans if slug not in set(remove)]
+    return PrunePlan(remove=remove, additional=additional)

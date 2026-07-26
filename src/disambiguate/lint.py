@@ -198,19 +198,31 @@ def _walk_reachable(
     return visited
 
 
-def _check_orphans(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
-    """Return one finding listing every term not reachable from `roots`."""
+def orphan_slugs(glossary: Glossary, roots: list[Path]) -> list[str]:
+    """
+    Return the slugs of every term not reachable from `roots`, sorted.
+
+    Reachability is transitive through cross-references, so a term
+    reachable from a root has a path made entirely of reachable terms.
+    That makes the orphan set closed under its own removal: deleting
+    orphans can never orphan a term that was reachable.
+    """
     visited = _walk_reachable(roots, glossary)
-    orphan_slugs = sorted(
+    return sorted(
         slug
         for slug, term in glossary.terms.items()
         if term.path.resolve() not in visited
     )
-    if not orphan_slugs:
+
+
+def _check_orphans(glossary: Glossary, roots: list[Path]) -> list[LintFinding]:
+    """Return one finding listing every term not reachable from `roots`."""
+    orphan_slugs_found = orphan_slugs(glossary, roots)
+    if not orphan_slugs_found:
         return []
 
     root_names = ", ".join(p.name for p in roots) or "(none)"
-    bullets = "\n".join(f"  - {slug}" for slug in orphan_slugs)
+    bullets = "\n".join(f"  - {slug}" for slug in orphan_slugs_found)
     message = (
         f"Orphan terms found (not reachable from roots: {root_names}):\n"
         f"{bullets}\n"

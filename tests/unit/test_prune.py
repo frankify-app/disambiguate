@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from disambiguate.glossary import Glossary, load_glossary
 from disambiguate.prune import plan_prune
 
@@ -36,7 +34,6 @@ def build(
     return load_glossary(glossary_dir), [readme_path]
 
 
-@pytest.mark.xfail(strict=True, reason="red: prune planning does not exist yet")
 def test_prune_removes_consenting_orphans_and_spares_linked_ones(
     tmp_path: Path,
 ) -> None:
