@@ -53,6 +53,14 @@ _INLINE_CODE_RE = re.compile(r"(?P<ticks>`+)(?!`).*?(?P=ticks)")
 
 _H2_RE = re.compile(r"^##\s+(?P<name>.+?)\s*$", re.MULTILINE)
 
+# The `d10e` annotation surface: an HTML comment carrying a
+# comma-separated list of annotations for the term it sits in. Invisible
+# in rendered markdown, and outside the H2-first invariant the lint and
+# the MD041 override rely on.
+_D10E_ANNOTATION_RE = re.compile(r"<!--\s*d10e:\s*(?P<annotations>[^>]*?)\s*-->")
+
+AUTO_PRUNE = "auto-prune"
+
 # Standard markdown link to an .md file: [text](path/to/foo.md), with an
 # optional #fragment after the path — the fragment is stripped, only the
 # path is captured. `#` is excluded from path characters so the greedy path
@@ -195,6 +203,25 @@ def extract_all_link_slugs(text: str) -> list[str]:
     return [slug for slug, _ in extract_all_link_refs(text)]
 
 
+def extract_d10e_annotations(text: str) -> set[str]:
+    """
+    Return every `d10e` annotation declared in `text`.
+
+    Annotations live in HTML comments of the form
+    `<!-- d10e: one, two -->`, so they stay invisible in rendered
+    markdown. Multiple comments accumulate; unknown names are returned
+    as-is for callers to ignore. Code blocks and inline code spans are
+    excluded, so a comment shown as an example never counts.
+    """
+    code_stripped = _strip_code(text)
+    annotations: set[str] = set()
+    for match in _D10E_ANNOTATION_RE.finditer(code_stripped):
+        for name in match.group("annotations").split(","):
+            if name.strip():
+                annotations.add(name.strip())
+    return annotations
+
+
 def parse_term_text(slug: str, text: str) -> ParsedTerm:
     """
     Parse the contents of a single term file.
@@ -216,4 +243,5 @@ def parse_term_text(slug: str, text: str) -> ParsedTerm:
         canonical_name=canonical_name,
         body=text,
         link_slugs=link_slugs,
+        auto_prune=AUTO_PRUNE in extract_d10e_annotations(text),
     )

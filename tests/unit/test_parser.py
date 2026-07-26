@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from disambiguate.parser import ParsedTerm, parse_term_text
 
 
@@ -129,7 +127,6 @@ def test_h2_with_extra_hashes_not_treated_as_h2() -> None:
     assert parsed.canonical_name is None
 
 
-@pytest.mark.xfail(strict=True, reason="red: d10e annotations are not parsed yet")
 def test_auto_prune_marker_is_parsed_as_consent() -> None:
     """
     A term consents to removal-when-orphaned via a d10e marker.
