@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v0.3.0 (2026-07-26)
+
+### Bug Fixes
+
+- Restore release notes by adding the changelog insertion flag
+  ([`b428aa2`](https://github.com/frankify-app/disambiguate/commit/b428aa2891a8b006ff23f98f24f27e0b65773b0a))
+
+### Documentation
+
+- Document prune and the auto-prune annotation
+  ([`d82410f`](https://github.com/frankify-app/disambiguate/commit/d82410f3f30776cce2f08fa98694ba429d3c212f))
+
+### Features
+
+- Add the prune verb
+  ([`1edc68a`](https://github.com/frankify-app/disambiguate/commit/1edc68a0f27beca7df9b3cb064814ef3be9d50ff))
+
+- Decide consent per orphaned branch, not per term
+  ([`d64caf0`](https://github.com/frankify-app/disambiguate/commit/d64caf0ad4d866e789cac05c57657677e457fa24))
+
+- Parse d10e annotations, including auto-prune consent
+  ([`666ae49`](https://github.com/frankify-app/disambiguate/commit/666ae490c8be848ab820566c24e60d9eeba98457))
+
+- Plan which terms a prune run removes
+  ([`2cfe12b`](https://github.com/frankify-app/disambiguate/commit/2cfe12bf356a84f76d279438be6f0f62196b914d))
+
+
 ## v0.2.1 (2026-07-25)
 
 ### Bug Fixes

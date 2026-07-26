@@ -7,4 +7,4 @@ topological order in a GitHub project or Obsidian vault.
 
 __author__ = "Frankify"
 __email__ = "creator@frankify.app"
-__version__ = "0.2.1"
+__version__ = "0.3.0"
