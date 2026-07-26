@@ -9,7 +9,7 @@ Repo: <https://github.com/frankify-app/disambiguate>
 Ubiquitous language is defined in docs/glossary/. Use
 
 ```bash
-uvx disambiguate==0.2.0 <term>
+uvx disambiguate==0.3.0 <term>
 ```
 
 to get a topologically ordered glossary disambiguating all relevant terms
@@ -18,13 +18,13 @@ to understand the given term.
 Before working on a ticket, run:
 
 ```bash
-uvx disambiguate==0.2.0 --from <ticket-file>
+uvx disambiguate==0.3.0 --from <ticket-file>
 ```
 
 or for GitHub issues:
 
 ```bash
-gh issue view <number> --json body -q .body | uvx disambiguate==0.2.0 --from -
+gh issue view <number> --json body -q .body | uvx disambiguate==0.3.0 --from -
 ```
 
 to resolve all referenced terms at once.
