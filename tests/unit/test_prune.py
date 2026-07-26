@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.glossary import Glossary, load_glossary
-from disambiguate.prune import plan_prune
+from disambiguate.prune import format_dry_run, plan_prune
 
 CONSENT = "<!-- d10e: auto-prune -->"
 
@@ -79,6 +81,33 @@ def test_all_orphans_widens_scope_to_terms_that_never_consented(
     assert widened.additional == []
 
 
+@pytest.mark.xfail(
+    strict=True, reason="red: consent is decided per term, not per branch"
+)
+def test_a_surviving_orphan_keeps_the_terms_it_links(tmp_path: Path) -> None:
+    """
+    A term linked by one that stays is in the same orphaned branch.
+
+    `stays` never consented, so it is not going anywhere. Its link puts
+    `goes` in the same branch, so `goes` stays too — removing it would
+    break a term still on disk and delete the context someone needs to
+    repair the missing inbound link. Both are reported: the branch is
+    what has to be dealt with.
+    """
+    glossary, roots = build(
+        tmp_path,
+        {
+            "goes": f"## Goes\n\n{CONSENT}\n\nLinked by a survivor.\n",
+            "stays": "## Stays\n\nLinks [goes](goes.md), never consented.\n",
+        },
+    )
+
+    plan = plan_prune(glossary, roots)
+
+    assert plan.remove == []
+    assert plan.additional == ["goes", "stays"]
+
+
 def test_removing_orphans_cannot_orphan_a_surviving_term(tmp_path: Path) -> None:
     """
     The cascade #52 worried about cannot happen.
@@ -100,3 +129,131 @@ def test_removing_orphans_cannot_orphan_a_surviving_term(tmp_path: Path) -> None
     plan = plan_prune(glossary, roots)
 
     assert plan.remove == ["island"]
+
+
+# --- The consent matrix ------------------------------------------------
+#
+# An orphaned branch is pruned only when EVERY term in it consents. One
+# non-consenting term anywhere keeps the whole branch: the
+# non-consenting term is a real finding, and the terms around it are the
+# context someone needs to fix the missing link. Deleting that context
+# to tidy the report would destroy the evidence.
+
+CHAIN_SLUGS = ("a", "b", "c")
+
+
+def chain(consents: tuple[bool, ...]) -> dict[str, str]:
+    """Build an orphaned chain a -> b -> ... with per-term consent."""
+    slugs = CHAIN_SLUGS[: len(consents)]
+    terms: dict[str, str] = {}
+    for index, (slug, consenting) in enumerate(zip(slugs, consents, strict=True)):
+        marker = f"{CONSENT}\n\n" if consenting else ""
+        if index + 1 < len(slugs):
+            target = slugs[index + 1]
+            tail = f"Links [{target}]({target}.md).\n"
+        else:
+            tail = "End of chain.\n"
+        terms[slug] = f"## {slug.upper()}\n\n{marker}{tail}"
+    return terms
+
+
+@pytest.mark.parametrize(
+    ("consents", "pruned"),
+    [
+        ((False, False), False),
+        pytest.param(
+            (True, False),
+            False,
+            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
+        ),
+        pytest.param(
+            (False, True),
+            False,
+            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
+        ),
+        ((True, True), True),
+        pytest.param(
+            (False, True, True),
+            False,
+            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
+        ),
+        pytest.param(
+            (True, False, True),
+            False,
+            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
+        ),
+        pytest.param(
+            (True, True, False),
+            False,
+            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
+        ),
+        ((True, True, True), True),
+    ],
+    ids=[
+        "nc-nc",
+        "c-nc",
+        "nc-c",
+        "c-c",
+        "nc-c-c",
+        "c-nc-c",
+        "c-c-nc",
+        "c-c-c",
+    ],
+)
+def test_default_prunes_a_branch_only_when_every_term_consents(
+    tmp_path: Path, consents: tuple[bool, ...], pruned: bool
+) -> None:
+    """One non-consenting term anywhere keeps the whole branch."""
+    slugs = list(CHAIN_SLUGS[: len(consents)])
+    glossary, roots = build(tmp_path, chain(consents))
+
+    plan = plan_prune(glossary, roots)
+
+    if pruned:
+        assert plan.remove == slugs
+        assert plan.additional == []
+    else:
+        assert plan.remove == []
+        assert plan.additional == slugs
+
+
+@pytest.mark.parametrize(
+    "consents",
+    [(False, False), (True, False), (False, True), (True, True)],
+    ids=["nc-nc", "c-nc", "nc-c", "c-c"],
+)
+def test_all_orphans_removes_every_orphan_regardless_of_consent(
+    tmp_path: Path, consents: tuple[bool, ...]
+) -> None:
+    """The widened scope ignores consent entirely."""
+    slugs = list(CHAIN_SLUGS[: len(consents)])
+    glossary, roots = build(tmp_path, chain(consents))
+
+    plan = plan_prune(glossary, roots, all_orphans=True)
+
+    assert plan.remove == slugs
+    assert plan.additional == []
+
+
+@pytest.mark.xfail(strict=True, reason="red: both no-op causes read the same")
+def test_dry_run_distinguishes_no_orphans_from_protected_orphans(
+    tmp_path: Path,
+) -> None:
+    """
+    "Nothing to remove" has two causes and they read differently.
+
+    A clean glossary and one whose orphans are all held by a
+    non-consenting neighbour are not the same situation, and the second
+    one still needs acting on.
+    """
+    clean, clean_roots = build(
+        tmp_path / "clean",
+        {"used": "## Used\n\nLinked.\n"},
+        readme="See [used](docs/glossary/used.md).\n",
+    )
+    assert "no orphaned terms" in format_dry_run(plan_prune(clean, clean_roots))
+
+    held, held_roots = build(tmp_path / "held", chain((True, False)))
+    message = format_dry_run(plan_prune(held, held_roots))
+    assert "no orphaned terms" not in message
+    assert "--all-orphans" in message

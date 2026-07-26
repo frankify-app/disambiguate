@@ -108,3 +108,96 @@ def test_prune_leaves_the_glossary_lint_clean(project: Path) -> None:
     run(["prune", "--all-orphans"], project)
 
     assert run(["--lint"], project)[0] == 0
+
+
+CHAIN_SLUGS = ("a", "b", "c")
+
+
+def chain_project(tmp_path: Path, consents: tuple[bool, ...]) -> Path:
+    """A repo whose whole glossary is one orphaned chain a -> b -> ..."""
+    (tmp_path / ".git").mkdir()
+    glossary = tmp_path / "docs" / "glossary"
+    glossary.mkdir(parents=True)
+    slugs = CHAIN_SLUGS[: len(consents)]
+    for index, (slug, consenting) in enumerate(zip(slugs, consents, strict=True)):
+        marker = f"{CONSENT}\n\n" if consenting else ""
+        if index + 1 < len(slugs):
+            target = slugs[index + 1]
+            tail = f"Links [{target}]({target}.md).\n"
+        else:
+            tail = "End of chain.\n"
+        (glossary / f"{slug}.md").write_text(
+            f"## {slug.upper()}\n\n{marker}{tail}", encoding="utf-8"
+        )
+    (tmp_path / "README.md").write_text("Nothing linked.\n", encoding="utf-8")
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    "consents",
+    [(False, False), (True, False), (False, True), (True, True)],
+    ids=["nc-nc", "c-nc", "nc-c", "c-c"],
+)
+def test_dry_run_never_deletes_whatever_the_consent_mix(
+    tmp_path: Path, consents: tuple[bool, ...]
+) -> None:
+    """--dry-run is inert, including the case the default run would take."""
+    project = chain_project(tmp_path, consents)
+    glossary = project / "docs" / "glossary"
+
+    code, _, _ = run(["prune", "--dry-run"], project)
+
+    assert code == 0
+    for slug in CHAIN_SLUGS[: len(consents)]:
+        assert (glossary / f"{slug}.md").exists(), f"{slug} must survive --dry-run"
+
+
+@pytest.mark.parametrize(
+    "consents",
+    [(False, False), (True, False), (False, True), (True, True)],
+    ids=["nc-nc", "c-nc", "nc-c", "c-c"],
+)
+def test_all_orphans_deletes_the_whole_chain(
+    tmp_path: Path, consents: tuple[bool, ...]
+) -> None:
+    """The widened scope clears an orphaned chain regardless of consent."""
+    project = chain_project(tmp_path, consents)
+    glossary = project / "docs" / "glossary"
+
+    code, _, _ = run(["prune", "--all-orphans"], project)
+
+    assert code == 0
+    for slug in CHAIN_SLUGS[: len(consents)]:
+        assert not (glossary / f"{slug}.md").exists()
+
+
+@pytest.mark.parametrize(
+    ("consents", "pruned"),
+    [
+        ((False, False), False),
+        pytest.param(
+            (True, False),
+            False,
+            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
+        ),
+        pytest.param(
+            (False, True),
+            False,
+            marks=pytest.mark.xfail(strict=True, reason="red: prunes part of a branch"),
+        ),
+        ((True, True), True),
+    ],
+    ids=["nc-nc", "c-nc", "nc-c", "c-c"],
+)
+def test_default_run_deletes_a_chain_only_when_all_of_it_consents(
+    tmp_path: Path, consents: tuple[bool, ...], pruned: bool
+) -> None:
+    """One non-consenting term anywhere keeps the files on disk."""
+    project = chain_project(tmp_path, consents)
+    glossary = project / "docs" / "glossary"
+
+    code, _, _ = run(["prune"], project)
+
+    assert code == 0
+    for slug in CHAIN_SLUGS[: len(consents)]:
+        assert (glossary / f"{slug}.md").exists() is not pruned
