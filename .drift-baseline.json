@@ -6,6 +6,7 @@
     "README.md:unlinked-term:glossary",
     "README.md:unlinked-term:slug",
     "docs/architecture.md:term-case:disambiguate",
+    "docs/glossary/auto-prune.md:unlinked-term:disambiguate",
     "docs/glossary/basename-resolution.md:unlinked-term:glossary",
     "docs/glossary/basename-resolution.md:unlinked-term:resolver",
     "docs/glossary/basename-resolution.md:unlinked-term:term",
