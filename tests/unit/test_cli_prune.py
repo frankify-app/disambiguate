@@ -64,7 +64,6 @@ def project(tmp_path: Path) -> Path:
     return tmp_path
 
 
-@pytest.mark.xfail(strict=True, reason="red: the prune verb does not exist yet")
 def test_prune_deletes_consenting_orphans_only(project: Path) -> None:
     """The default run removes what consented and nothing else."""
     code, _, _ = run(["prune"], project)
@@ -76,7 +75,6 @@ def test_prune_deletes_consenting_orphans_only(project: Path) -> None:
     assert (glossary / "local.md").exists()
 
 
-@pytest.mark.xfail(strict=True, reason="red: the prune verb does not exist yet")
 def test_prune_dry_run_deletes_nothing_and_names_the_widening_flag(
     project: Path,
 ) -> None:
@@ -91,7 +89,6 @@ def test_prune_dry_run_deletes_nothing_and_names_the_widening_flag(
     assert "--all-orphans" in stdout
 
 
-@pytest.mark.xfail(strict=True, reason="red: the prune verb does not exist yet")
 def test_prune_all_orphans_also_removes_terms_that_never_consented(
     project: Path,
 ) -> None:
@@ -104,7 +101,6 @@ def test_prune_all_orphans_also_removes_terms_that_never_consented(
     assert not (glossary / "local.md").exists()
 
 
-@pytest.mark.xfail(strict=True, reason="red: the prune verb does not exist yet")
 def test_prune_leaves_the_glossary_lint_clean(project: Path) -> None:
     """The point of the feature: --lint passes after pruning."""
     assert run(["--lint"], project)[0] == 1

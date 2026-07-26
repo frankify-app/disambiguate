@@ -7,6 +7,9 @@ Argparse-driven dispatch with four operating modes:
 - `--from <doc>`: extract slugs from a document, then render
 - `--explain`: render Disambiguate's own bundled glossary, with preamble
 - `--lint`: validate the user's glossary
+
+Plus one verb, dispatched before the parser: `prune`, which removes
+terms nothing links.
 """
 
 from __future__ import annotations
@@ -33,6 +36,7 @@ from .from_mode import BrokenFromLinkError, extract_slugs
 from .glossary import DuplicateSlugError, Glossary, load_glossary
 from .lint import lint_glossary
 from .logging_config import DEBUG_LEVEL, configure_logging
+from .prune import apply_prune, format_dry_run, plan_prune
 from .renderer import build_explain_preamble, render_terms
 from .resolver import CycleError, UnknownSlugError, resolve
 
@@ -41,6 +45,9 @@ logger = logging.getLogger(__name__)
 EXIT_OK = 0
 EXIT_FAILURE = 1
 EXIT_USAGE = 2
+
+# Dispatched before the main parser, which takes free-form slugs.
+PRUNE_VERB = "prune"
 
 # Canonical slug alphabet: lowercase ASCII letters, digits, and hyphen.
 _NON_SLUG_CHARS = re.compile(r"[^a-z0-9-]")
@@ -126,6 +133,77 @@ def _build_parser() -> argparse.ArgumentParser:
         version=f"disambiguate {__version__}",
     )
     return parser
+
+
+def _build_prune_parser() -> argparse.ArgumentParser:
+    """
+    Build the parser for the `prune` verb.
+
+    A separate parser rather than a subparser: the main parser takes
+    free-form `slugs` positionally, and argparse cannot offer an
+    optional subcommand alongside that without making `prune` ambiguous
+    with a term of the same name.
+    """
+    parser = argparse.ArgumentParser(
+        prog="disambiguate prune",
+        description=(
+            "Remove glossary terms nothing links. A term consents by "
+            "carrying a `<!-- d10e: auto-prune -->` annotation."
+        ),
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what would be removed and exit without deleting anything.",
+    )
+    parser.add_argument(
+        "--all-orphans",
+        action="store_true",
+        help="Also remove orphaned terms that never declared consent.",
+    )
+    parser.add_argument(
+        "--glossary",
+        metavar="DIR",
+        help="Override glossary directory (default: auto-discover).",
+    )
+    parser.add_argument(
+        "--roots",
+        metavar="PATH",
+        nargs="+",
+        help="Roots reachability is measured from. Default: <repo-root>/README.md.",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Increase log verbosity (-v=INFO, -vv=DEBUG).",
+    )
+    return parser
+
+
+def _run_prune(argv: list[str]) -> int:
+    """Plan and, unless `--dry-run`, carry out a prune."""
+    args = _build_prune_parser().parse_args(argv)
+    configure_logging(args.verbose)
+
+    glossary = load_glossary(_user_glossary_path(args.glossary))
+    roots = _resolve_lint_roots(args.roots)
+    plan = plan_prune(glossary, roots, all_orphans=args.all_orphans)
+
+    if args.dry_run:
+        print(format_dry_run(plan))
+        return EXIT_OK
+
+    removed = apply_prune(plan, glossary)
+    if not removed:
+        print("Nothing to prune: no orphaned term consents to removal.")
+        return EXIT_OK
+
+    print(f"Pruned {len(removed)} orphaned term(s):")
+    for slug in plan.remove:
+        print(f"  - {slug}")
+    return EXIT_OK
 
 
 def _user_glossary_path(arg_value: str | None) -> Path:
@@ -259,6 +337,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     tracebacks only surface with `-vv`.
 
     """
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if raw_argv and raw_argv[0] == PRUNE_VERB:
+        try:
+            return _run_prune(raw_argv[1:])
+        except (
+            DuplicateSlugError,
+            GlossaryNotFoundError,
+            RepoRootNotFoundError,
+            RootFileMissingError,
+            FileNotFoundError,
+        ) as e:
+            logger.error("%s", e)
+            return EXIT_FAILURE
+
     parser = _build_parser()
     args = parser.parse_args(argv)
     effective_level = configure_logging(args.verbose)

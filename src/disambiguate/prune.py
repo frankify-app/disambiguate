@@ -14,11 +14,14 @@ opted in.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from disambiguate.glossary import Glossary
 from disambiguate.lint import orphan_slugs
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -66,3 +69,46 @@ def plan_prune(
     remove = [slug for slug in orphans if glossary.terms[slug].auto_prune]
     additional = [slug for slug in orphans if slug not in set(remove)]
     return PrunePlan(remove=remove, additional=additional)
+
+
+def apply_prune(plan: PrunePlan, glossary: Glossary) -> list[Path]:
+    """
+    Delete the term files named by `plan.remove`.
+
+    Returns
+    -------
+    The paths removed, in plan order.
+
+    """
+    removed: list[Path] = []
+    for slug in plan.remove:
+        path = glossary.terms[slug].path
+        path.unlink()
+        logger.debug("pruned term %s (%s)", slug, path)
+        removed.append(path)
+    return removed
+
+
+def format_dry_run(plan: PrunePlan) -> str:
+    """
+    Describe a plan without acting on it.
+
+    Names `--all-orphans` whenever the widened set is non-empty — that is
+    what makes the flag discoverable instead of merely guessable.
+    """
+    lines: list[str] = []
+    if plan.remove:
+        lines.append(f"Would remove {len(plan.remove)} orphaned term(s):")
+        lines.extend(f"  - {slug}" for slug in plan.remove)
+    else:
+        lines.append("Nothing to remove: no orphaned term consents to pruning.")
+
+    if plan.additional:
+        lines.append("")
+        lines.append(
+            f"Orphaned without consent — run with `--all-orphans` to also "
+            f"remove these {len(plan.additional)}:"
+        )
+        lines.extend(f"  - {slug}" for slug in plan.additional)
+
+    return "\n".join(lines)
