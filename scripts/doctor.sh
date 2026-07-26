@@ -152,10 +152,11 @@ if [[ -f .pre-commit-config.yaml ]] && git rev-parse --is-inside-work-tree >/dev
     fi
 fi
 
-# Decision-memory contract (tools/record.py + grilling skill): warn when the env var is unset;
+# Decision-memory contract (grilling skill + the store's recorder): warn when the env var is unset;
 # when set, a cheap ls-remote surfaces bad URLs / missing credentials now
 # instead of mid-session. No clone here — session-start shallow-clone is the
-# recorder's job, per-session and ephemeral by design.
+# recorder's job, per-session and ephemeral by design — and the recorder
+# lives in the store, not here.
 decision_memory_failed=false
 echo
 if [[ -z "${DECISION_MEMORY_URL:-}" ]]; then

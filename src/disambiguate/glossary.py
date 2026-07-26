@@ -33,6 +33,8 @@ class Term:
     link_slugs: cross-reference targets in document order; may include
         unknown slugs (those are surfaced by lint, not filtered out here).
     path: absolute path to the source file on disk.
+    auto_prune: the term declares that it may be removed once nothing
+        links it. Absent marker means no consent.
     """
 
     slug: str
@@ -40,6 +42,7 @@ class Term:
     body: str
     link_slugs: list[str]
     path: Path
+    auto_prune: bool = False
 
 
 @dataclass(frozen=True)
@@ -101,6 +104,7 @@ def load_glossary(root: Path) -> Glossary:
             body=parsed.body,
             link_slugs=parsed.link_slugs,
             path=md_path,
+            auto_prune=parsed.auto_prune,
         )
         logger.debug("loaded term %s from %s", slug, md_path)
 

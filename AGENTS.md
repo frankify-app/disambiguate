@@ -37,6 +37,7 @@ Read [docs/architecture.md](docs/architecture.md) before touching any code.
 
 - Small, single-purpose files
 - Readability over brevity — straightforward, easy-to-follow code. No compact "one-liners" stretching across multiple lines (e.g. nested ternaries). Stretching across multiple lines is only allowed if it aids readability.
+- When removing a feature, erase every mention of it — docs, help text, comments, tests. Don't leave "no longer supported" notes: readers who never knew it existed pay to learn it did. State what is, not what stopped being. (Migration notes belong in the commit's `BREAKING CHANGE:` footer, which is where someone upgrading looks.)
 - All routes and non-trivial functions: docstring contracts (params, returns, errors)
 - Test cases cover edge cases and every `@returns` line
 
@@ -115,7 +116,16 @@ Code-specific skills:
 
 ### Skill Environment Variables
 
-- `DECISION_MEMORY_URL` — FULL git URL of the decision-memory repo that `tools/record.py` (and the `grilling` skill through it) records decisions to. A full URL rather than an owner/repo slug, so the hosting stays swappable. Recording requires this env var in the agent's execution environment; the tool and the skill read exactly this name (shared contract — renaming either side breaks recording silently). Never hardcode, commit, or echo the value into artifacts. Unset → grilling still works, skips recording, and says so. Where to set it: local sessions → shell profile / user-level agent settings; remote or cloud sessions → the environment's configuration; CI → a repository secret. `scripts/doctor.sh` warns when it's unset and checks reachability when set.
+- `DECISION_MEMORY_URL` — FULL git URL of the decision-memory repo the `grilling` skill records decisions to. A full URL rather than an owner/repo slug, so the hosting stays swappable. Recording requires this env var in the agent's execution environment; the recorder and the skill read exactly this name (shared contract — renaming either side breaks recording silently). Never hardcode, commit, or echo the value into artifacts. Unset → grilling still works, skips recording, and says so. Where to set it: local sessions → shell profile / user-level agent settings; remote or cloud sessions → the environment's configuration; CI → a repository secret. `scripts/doctor.sh` warns when it's unset and checks reachability when set.
+
+  To record, use the recorder in the decision-memory repo — clone it fresh per session and run the copy that arrives with it, which operates on its own checkout:
+
+  ```bash
+  git clone "$DECISION_MEMORY_URL" <dir>
+  python <dir>/tools/record.py open      # behavior doc: record.py --help
+  ```
+
+  A fresh clone is clean and on the store's default branch, which keeps a session's PR to that session's own records. Each record is pushed as it lands, so the clone is disposable.
 
 ## Git
 

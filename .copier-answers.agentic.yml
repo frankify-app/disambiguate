@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v2.0.1
+_commit: v3.0.0
 _src_path: https://github.com/frankify-app/agentic-engineering-template
 agentic_disambiguate_roots: ''
 agentic_disambiguate_version: 0.2.0

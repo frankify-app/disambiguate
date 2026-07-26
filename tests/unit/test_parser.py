@@ -125,3 +125,20 @@ def test_h2_with_extra_hashes_not_treated_as_h2() -> None:
     text = "### H3\n\nbody\n"
     parsed = parse_term_text("foo", text)
     assert parsed.canonical_name is None
+
+
+def test_auto_prune_marker_is_parsed_as_consent() -> None:
+    """
+    A term consents to removal-when-orphaned via a d10e marker.
+
+    The marker carries no provenance — only that this term may be
+    removed once nothing links it.
+    """
+    consenting = parse_term_text(
+        "grilling",
+        "## Grilling\n\n<!-- d10e: auto-prune -->\n\nThe interview loop.\n",
+    )
+    assert consenting.auto_prune is True
+
+    plain = parse_term_text("grilling", "## Grilling\n\nThe interview loop.\n")
+    assert plain.auto_prune is False

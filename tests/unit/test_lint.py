@@ -243,3 +243,28 @@ def test_lint_reachability_through_display_text_wikilink(tmp_path: Path) -> None
     glossary = load_glossary(glossary_dir)
     findings = lint_glossary(glossary, roots=[root])
     assert not any(f.kind == "orphan" for f in findings)
+
+
+def test_auto_prune_marker_does_not_disturb_lint_or_the_h2(tmp_path: Path) -> None:
+    """
+    A consenting term is an ordinary term to every other check.
+
+    The marker sits in an HTML comment so it stays invisible in rendered
+    markdown, keeps the H2 first, and produces no finding of its own.
+    Acceptance criterion from frankify-app/disambiguate#52.
+    """
+    glossary_dir = _setup_glossary(tmp_path)
+    _write(
+        glossary_dir,
+        "marked",
+        "## Marked\n\n<!-- d10e: auto-prune -->\n\nLinks [plain](plain.md).\n",
+    )
+    _write(glossary_dir, "plain", "## Plain\n\nbody\n")
+    root = tmp_path / "README.md"
+    root.write_text("[m](glossary/marked.md)\n", encoding="utf-8")
+
+    glossary = load_glossary(glossary_dir)
+
+    assert glossary.terms["marked"].canonical_name == "Marked"
+    assert glossary.terms["marked"].auto_prune is True
+    assert lint_glossary(glossary, roots=[root]) == []
