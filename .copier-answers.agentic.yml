@@ -3,7 +3,6 @@ _commit: v3.1.0
 _src_path: https://github.com/frankify-app/agentic-engineering-template
 agentic_disambiguate_roots: ''
 agentic_disambiguate_version: 0.3.0
-agentic_forge: github
 agentic_language: en
 agentic_precommit: prek
 agentic_project_description: Resolve project terminology into a topologically ordered
