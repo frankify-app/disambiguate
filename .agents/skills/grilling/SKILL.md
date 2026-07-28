@@ -47,7 +47,7 @@ Rules:
 
 ## Recording
 
-Decision records go to the decision-memory repo. Repo URL comes EXCLUSIVELY from the template-execution variable `DECISION_MEMORY_REPO` (fixed name) — never hardcoded, never committed into skill or template, never echoed into artifacts. Variable unset → tell user, skip recording.
+Decision records go to the decision-memory repo. Repo URL comes EXCLUSIVELY from the environment variable `DECISION_MEMORY_URL` (fixed name — the same name `scripts/doctor.sh` checks and every repo's agent-instructions file documents) — never hardcoded, never committed into skill or template, never echoed into artifacts. Variable unset → tell user, skip recording. Say so out loud: a silent skip is indistinguishable from a successful record, and the whole point of the store is that a ruling outlives the session.
 
 - Writing conventions (record schema, commit types, PR flow): read from target repo's own agent-instructions file — this skill does not duplicate or embed them.
 - Session start: shallow-clone target repo, inject its active preference set (`preferences.md`) ONLY — never full decision history.
