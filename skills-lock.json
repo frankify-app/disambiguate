@@ -35,7 +35,7 @@
       "source": "frankify-app/skills",
       "sourceType": "github",
       "skillPath": "derived/grilling/SKILL.md",
-      "computedHash": "82c8da67d4ec62ded3a4b3823b0e4678d93a0acfc22ac41180cb1b4a5f336872"
+      "computedHash": "1ca262bd5043cedbd75fdcaa0dc339680c11d9d382416c2bf48ace0c2b3caa42"
     },
     "requesting-code-review": {
       "source": "obra/superpowers",
