@@ -1,8 +1,15 @@
 name: Template Update
 
 on:
+  # Fired by the template's own release job the moment a release is cut,
+  # so an update arrives because something happened rather than because a
+  # timer caught up.
+  repository_dispatch:
+    types: [template-released]
   schedule:
-    # Weekly, off the top of the hour to dodge GitHub's cron stampede.
+    # Backstop, not the delivery path: a repo stamped after the dispatch
+    # ran, or one the dispatch failed to reach, still converges within a
+    # week. Off the top of the hour to dodge GitHub's cron stampede.
     - cron: "17 5 * * 1"
   workflow_dispatch:
 
@@ -33,13 +40,56 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          open_prs="$(gh pr list --state open --json headRefName \
-            --jq '[.[].headRefName | select(startswith("chore/template-update-"))] | length')"
-          if [ "$open_prs" -gt 0 ]; then
-            echo "An update PR is already open ($open_prs) — skipping."
-            echo "skip=true" >> "$GITHUB_OUTPUT"
+          open_pr="$(gh pr list --state open --json headRefName,number,url,createdAt \
+            --jq 'map(select(.headRefName | startswith("chore/template-update-"))) | first')"
+          if [ -n "$open_pr" ] && [ "$open_pr" != "null" ]; then
+            echo "An update PR is already open — skipping the update run."
+            {
+              echo "skip=true"
+              echo "pr_url=$(echo "$open_pr" | jq -r .url)"
+              echo "pr_opened=$(echo "$open_pr" | jq -r .createdAt)"
+            } >> "$GITHUB_OUTPUT"
           else
             echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # The cron is the auditor, so it is the run that has to be loud. A
+      # repo can be behind for exactly two reasons, and both are failures
+      # of something rather than states to live with:
+      #
+      #   - an update PR is open and nobody merged it
+      #   - no PR at all, which means the release fan-out never arrived
+      #
+      # Neither is visible from a green weekly run, and "quietly behind"
+      # is the state this whole mechanism exists to prevent.
+      - name: Audit — is this repo actually on the latest template?
+        if: github.event_name == 'schedule'
+        id: audit
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_URL: ${{ steps.dedupe.outputs.pr_url }}
+          PR_OPENED: ${{ steps.dedupe.outputs.pr_opened }}
+        run: |
+          set -euo pipefail
+          answers_file=".copier-answers.agentic.yml"
+          stamped="$(awk '$1 == "_commit:" {print $2}' "$answers_file")"
+
+          src_path="$(awk '$1 == "_src_path:" {print $2}' "$answers_file")"
+          template_repo="${src_path#gh:}"
+          template_repo="${template_repo#https://github.com/}"
+          template_repo="${template_repo%.git}"
+
+          latest="$(gh release view --repo "$template_repo" --json tagName --jq .tagName)"
+
+          if [ "$stamped" = "$latest" ]; then
+            echo "On the latest template ($latest)."
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "${PR_URL:-}" ]; then
+            echo "::error::Out of date: stamped $stamped, latest is $latest. An update PR has been open since $PR_OPENED and has not been merged: $PR_URL"
+            echo "drift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::error::Out of date: stamped $stamped, latest is $latest, and no update PR exists. The release fan-out did not reach this repo — check the dispatch step of the template's release job."
+            echo "drift=true" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
@@ -125,3 +175,12 @@ jobs:
             --title "chore: update agentic template to $NEW_REF" \
             --body-file /tmp/pr-body.md \
             --head "$branch"
+
+      # Last, not at the audit: a drifted repo with no PR still needs the
+      # update run above to open one. Failing early would report the
+      # problem and then decline to fix it.
+      - name: Fail the audit if this repo is behind
+        if: github.event_name == 'schedule' && steps.audit.outputs.drift == 'true'
+        run: |
+          echo "Weekly audit found this repo behind the template — see the annotation above."
+          exit 1

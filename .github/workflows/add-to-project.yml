@@ -1,0 +1,35 @@
+name: Add to project board
+
+on:
+  issues:
+    types: [opened, reopened]
+  # `pull_request` from a fork carries no secrets, so the token would be
+  # empty exactly when a contributor opens a PR. The base-context event
+  # has it. Safe here only because this workflow never checks out — let
+  # alone runs — the PR's code.
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions: {}
+
+concurrency:
+  group: add-to-project-${{ github.event.number || github.event.issue.number }}
+
+jobs:
+  add:
+    name: "add to board"
+    runs-on: ubuntu-latest
+    # GitHub's built-in auto-add workflow is plan-limited to a single
+    # repository, so the board is populated from here instead. Repos that
+    # set no board URL show this job as SKIPPED rather than green.
+    if: ${{ vars.PROJECT_BOARD_URL != '' }}
+    steps:
+      - uses: actions/add-to-project@244f685bbc3b7adfa8466e08b698b5577571133e # v1.0.2
+        with:
+          project-url: ${{ vars.PROJECT_BOARD_URL }}
+          # An ORG-level project is outside the repo-scoped GITHUB_TOKEN's
+          # reach, so this needs a PAT with organization Projects: write.
+          # It expires; when it does, items stop reaching the board and the
+          # only visible signal is this job going red. Do not soften that
+          # into a warning.
+          github-token: ${{ secrets.PROJECT_BOARD_TOKEN }}
