@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v3.1.0
+_commit: v3.6.2
 _src_path: https://github.com/pandoscope/agentic-engineering-template
 agentic_disambiguate_roots: ''
 agentic_disambiguate_version: 0.3.0
@@ -11,6 +11,6 @@ agentic_project_description: Resolve project terminology into a topologically or
 agentic_project_kind: code
 agentic_project_name: Disambiguate
 agentic_project_slug: disambiguate
-agentic_repo_owner: frankify-app
+agentic_repo_owner: pandoscope
 agentic_subtemplate: template
 agentic_tracker_cli: gh

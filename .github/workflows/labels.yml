@@ -1,22 +1,48 @@
-name: Sync Github labels
+name: Sync labels
 
 on:
   push:
     branches:
       - main
     paths:
-      - ".github/**"
+      # Only when the taxonomy itself changes — this workflow DELETES
+      # labels absent from the config, so it must not fire incidentally.
+      - ".github/labels.toml"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: labels-${{ github.ref }}
 
 jobs:
-  labels:
+  sync:
+    name: "labels sync"
     runs-on: ubuntu-latest
+    # Opt-in per repo. A repo that never sets the variable shows this job
+    # as SKIPPED, which is visibly different from a green run — an absent
+    # sync must never be indistinguishable from a successful one.
+    if: ${{ vars.LABELS_SYNC_ENABLED == 'true' }}
     steps:
-      - uses: actions/checkout@v6
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: actions/setup-python@e9d6f990972a57673cdb72ec29e19d42ba28880f # v6
         with:
-          python-version: 3.x
-      - name: Install labels
-        run: pip install labels
-      - name: Sync config with Github
-        run: labels -u ${{ github.repository_owner }} -t ${{ secrets.LABELS_TOKEN }} sync -o ${{ github.repository_owner }} -r ${{ github.event.repository.name }} -f .github/labels.toml
+          python-version: "3.x"
+
+      - name: Sync .github/labels.toml with the forge
+        env:
+          # Needs a PAT with `repo` scope: the default GITHUB_TOKEN cannot
+          # manage labels across an org from a shared config.
+          LABELS_TOKEN: ${{ secrets.LABELS_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${LABELS_TOKEN:-}" ]; then
+            echo "::error::LABELS_SYNC_ENABLED is true but LABELS_TOKEN is unset."
+            exit 1
+          fi
+          pip install labels
+          labels -u "${{ github.repository_owner }}" -t "$LABELS_TOKEN" \
+            sync -o "${{ github.repository_owner }}" \
+                 -r "${{ github.event.repository.name }}" \
+                 -f .github/labels.toml

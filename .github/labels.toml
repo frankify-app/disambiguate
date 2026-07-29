@@ -1,12 +1,70 @@
-[breaking]
-color = "ffcc00"
-name = "breaking"
-description = "Breaking change."
+# Label taxonomy, synced by .github/workflows/labels.yml.
+#
+# Deliberately small. A label earns its place by having a CONSUMER —
+# something or someone that filters on it. Labels nothing reads drift
+# out of sync with the behaviour they appear to describe, and then
+# mislead the next reader.
+#
+# WARNING: `labels sync` DELETES any label not listed here, removing it
+# from every issue that carries it. Run `labels fetch` first in a repo
+# with existing labels.
 
-[bug]
+# --- triage taxonomy -------------------------------------------------
+# The same four values the evidence store's `triage` field takes, so a
+# record and the ticket it links classify identically.
+
+[code-bug]
 color = "d73a4a"
-name = "bug"
-description = "Something isn't working"
+name = "code-bug"
+description = "Behaviour contradicts the code's own contract"
+
+[doc-bug]
+color = "1bc4a5"
+name = "doc-bug"
+description = "Behaviour is right, the documentation is wrong"
+
+[expectation-bug]
+color = "e99695"
+name = "expectation-bug"
+description = "Code and docs agree; the expectation they set is wrong"
+
+[feature]
+color = "a2eeef"
+name = "feature"
+description = "A capability that is absent rather than broken"
+
+# --- agent lanes -----------------------------------------------------
+
+[needs-human-review]
+color = "b60205"
+name = "needs-human-review"
+description = "Never auto-merges: a human gate stands between this and main"
+
+# --- programme phase -------------------------------------------------
+# TEMPORARY, for the org consolidation. Encodes dependency order, not
+# urgency. Delete all four when the programme ends.
+
+[phase-0]
+color = "5319e7"
+name = "phase-0"
+description = "Instruments: the board, the stores, the labels themselves"
+
+[phase-1]
+color = "7057ff"
+name = "phase-1"
+description = "Drain in-flight work, in dependency order"
+
+[phase-2]
+color = "9d7bea"
+name = "phase-2"
+description = "Org-wide refactors, gated behind phase-1"
+
+[phase-3]
+color = "c5b3f2"
+name = "phase-3"
+description = "Observation layer — runs throughout, not after"
+
+# --- kept, because a bot applies them --------------------------------
 
 [dependencies]
 color = "0366d6"
@@ -17,83 +75,3 @@ description = "Pull requests that update a dependency file"
 color = "000000"
 name = "github_actions"
 description = "Update of github actions"
-
-[documentation]
-color = "1bc4a5"
-name = "documentation"
-description = "Improvements or additions to documentation"
-
-[duplicate]
-color = "cfd3d7"
-name = "duplicate"
-description = "This issue or pull request already exists"
-
-[enhancement]
-color = "a2eeef"
-name = "enhancement"
-description = "New feature or request"
-
-["good first issue"]
-color = "7057ff"
-name = "good first issue"
-description = "Good for newcomers"
-
-["help wanted"]
-color = "008672"
-name = "help wanted"
-description = "Extra attention is needed"
-
-[invalid]
-color = "e4e669"
-name = "invalid"
-description = "This doesn't seem right"
-
-[nochangelog]
-color = "555555"
-name = "nochangelog"
-description = "Exclude pull requests from changelog"
-
-[question]
-color = "d876e3"
-name = "question"
-description = "Further information is requested"
-
-[removed]
-color = "e99695"
-name = "removed"
-description = "Removed piece of functionalities."
-
-[tests]
-color = "bfd4f2"
-name = "tests"
-description = "CI, CD and testing related changes"
-
-[wontfix]
-color = "ffffff"
-name = "wontfix"
-description = "This will not be worked on"
-
-[discussion]
-color = "c2e0c6"
-name = "discussion"
-description = "Some discussion around the project"
-
-[hacktoberfest]
-color = "ffa663"
-name = "hacktoberfest"
-description = "Good issues for Hacktoberfest"
-
-[answered]
-color = "0ee2b6"
-name = "answered"
-description = "Automatically closes as answered after a delay"
-
-[waiting]
-color = "5f7972"
-name = "waiting"
-description = "Automatically closes if no answer after a delay"
-
-[fund]
-color = "0E8A16"
-name = "fund"
-description = "Add a section linking to polar.sh for funding the issue."
