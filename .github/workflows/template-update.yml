@@ -140,16 +140,50 @@ jobs:
         run: |
           set -euo pipefail
           branch="chore/template-update-$NEW_REF"
+          head="$(git rev-parse HEAD)"
 
-          git config user.name "release-bot[bot]"
-          git config user.email "release-bot[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
-          # Conflicts are committed as copier's inline markers on purpose:
-          # the PR opens either way and red CI flags them for resolution on
-          # the branch, so updates never silently stall.
+          # The commit is created through the API, not the git CLI:
+          # createCommitOnBranch commits are signed by GitHub on behalf
+          # of the app and show as Verified, so repos can require
+          # verified signatures without exempting this bot. Conflicts
+          # are still committed as copier's inline markers on purpose:
+          # the PR opens either way and red CI flags them for resolution
+          # on the branch, so updates never silently stall.
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f ref="refs/heads/$branch" -f sha="$head" --silent
+
           git add -A
-          git commit -m "chore: update agentic template $OLD_REF -> $NEW_REF"
-          git push -u origin "$branch"
+          printf '[]' > /tmp/additions.json
+          printf '[]' > /tmp/deletions.json
+          while IFS=$'\t' read -r status path; do
+            [ -z "$status" ] && continue
+            if [ "$status" = "D" ]; then
+              jq --arg p "$path" '. + [{path: $p}]' /tmp/deletions.json \
+                > /tmp/d.json && mv /tmp/d.json /tmp/deletions.json
+            else
+              jq --arg p "$path" --arg c "$(base64 -w0 "$path")" \
+                '. + [{path: $p, contents: $c}]' /tmp/additions.json \
+                > /tmp/a.json && mv /tmp/a.json /tmp/additions.json
+            fi
+          done < <(git -c core.quotePath=false -c diff.renames=false \
+            diff --cached --name-status)
+
+          jq -n \
+            --slurpfile adds /tmp/additions.json \
+            --slurpfile dels /tmp/deletions.json \
+            --arg repo "$GITHUB_REPOSITORY" \
+            --arg branch "$branch" \
+            --arg head "$head" \
+            --arg headline "chore: update agentic template $OLD_REF -> $NEW_REF" \
+            '{query: "mutation($input: CreateCommitOnBranchInput!) { createCommitOnBranch(input: $input) { commit { oid } } }",
+              variables: {input: {
+                branch: {repositoryNameWithOwner: $repo, branchName: $branch},
+                expectedHeadOid: $head,
+                message: {headline: $headline},
+                fileChanges: {additions: $adds[0], deletions: $dels[0]}}}}' \
+            > /tmp/graphql.json
+          gh api graphql --input /tmp/graphql.json \
+            --jq '.data.createCommitOnBranch.commit.oid'
 
           # Changelog excerpt from the template's GitHub Release for the new
           # tag. Best-effort: a missing release only degrades the PR body.
