@@ -164,7 +164,22 @@ Line wrapping:
   the rendered text at random places, because each single newline
   becomes a hard break.
 
-Repairing violations (applies to both rules):
+Linking commits and other references:
+
+- **A commit named in tracker-posted content must be clickable.**
+  Write `[«short-sha»](«repo-url»/commit/«full-sha»)`,
+  or `«owner»/«repo»@«sha»` for a repo other than the one being posted to.
+- Backticks suppress it:
+  the tracker autolinks a *bare* SHA in the same repo,
+  but `` `«sha»` `` renders as inert code —
+  so the habit of code-formatting an identifier is exactly what breaks the link.
+  A cross-repo SHA never autolinks at all, bare or not.
+- The same applies to anything the reader will want to open:
+  files (link to the blob at a ref), workflow runs, and PRs or issues in another repo
+  (`«owner»/«repo»#«n»`, which does autolink).
+  A reference the reader has to copy-paste into a search box is a reference that will not be followed.
+
+Repairing violations (applies to all rules above):
 
 - If an EXISTING ticket violates them, ask the user whether it should
   be fixed — don't rewrite it unprompted.
