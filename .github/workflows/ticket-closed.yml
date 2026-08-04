@@ -1,0 +1,62 @@
+name: Report ticket close to the ledger
+
+# The session-memory store closes a thread when the thread's own ticket
+# closes. The store cannot hear this repository's events — a workflow
+# only receives events from the repository it sits in — so every repo
+# that mints tickets reports its own closes.
+
+on:
+  issues:
+    types: [closed]
+
+permissions: {}
+
+concurrency:
+  group: ticket-closed-${{ github.event.issue.number }}
+
+jobs:
+  dispatch:
+    name: "tell the store"
+    runs-on: ubuntu-latest
+    # Repos in an org without a session-memory store show this SKIPPED
+    # rather than green. The variable carries owner/repo, set once at
+    # org level — deliberately not baked in at stamping time, so the
+    # rendered file names no org's store and a store move is one
+    # variable edit, not a re-stamp of every repo.
+    if: ${{ vars.SESSION_MEMORY_REPO != '' }}
+    steps:
+      - name: Name the store's repository
+        id: store
+        env:
+          STORE: ${{ vars.SESSION_MEMORY_REPO }}
+        run: |
+          set -euo pipefail
+          echo "name=${STORE##*/}" >> "$GITHUB_OUTPUT"
+
+      # The same app that runs releases and template updates, because its
+      # key already reaches every stamped repo and — unlike a fine-grained
+      # PAT — never expires, so no yearly morning where every sender in
+      # the org goes red at once. repository_dispatch is outside the
+      # repo-scoped GITHUB_TOKEN's reach; the minted token is scoped to
+      # the store repo alone.
+      - name: Mint a token that can reach the store
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ steps.store.outputs.name }}
+
+      - env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          STORE: ${{ vars.SESSION_MEMORY_REPO }}
+          TICKET: ${{ github.repository }}#${{ github.event.issue.number }}
+        run: |
+          set -euo pipefail
+          # The payload carries only the ticket's name. The store
+          # re-reads the ticket's state itself, so a stale or replayed
+          # dispatch can cause a wasted lookup, never a wrong event.
+          gh api "repos/${STORE}/dispatches" \
+            -f event_type=ticket-closed \
+            -f "client_payload[ticket]=${TICKET}"
