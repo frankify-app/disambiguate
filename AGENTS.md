@@ -135,6 +135,17 @@ Code-specific skills:
 - Create PR immediately on branch creation
 - Commits: conventional commits
 - Document unexpected encounters and design decisions in commit message as well as PR/Issue
+- **A push rejected over a commit you did not write is rebased around, never forced.**
+  Branch rules re-evaluate every commit an update spans, not just the new ones,
+  so moving a branch that was parked before a rule-violating commit reached `main`
+  is rejected for *that* commit — one already merged, that no push can fix.
+  The rejection names the SHA: if `git log --format='%an %s' -1 <sha>` is not your work,
+  this is what happened.
+  Restart the branch from its own base instead of from `main`
+  (`git rebase --onto <old-base> origin/main <branch>`),
+  which keeps the span clear of the offending commit and leaves the diff unchanged.
+  Forcing the push or deleting the branch to escape the rule
+  is the step that turns a rejected push into lost work.
 
 ### Tracker Content Formatting
 
