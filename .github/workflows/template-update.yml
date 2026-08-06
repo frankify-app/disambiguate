@@ -13,62 +13,38 @@ on:
     - cron: "17 5 * * 1"
   workflow_dispatch:
 
-# The workflow only acts through the release-bot app token minted below —
-# the default GITHUB_TOKEN would open PRs that trigger no CI, silently
-# skipping the checks that flag copier conflict markers for resolution.
+# The update job only acts through the release-bot app token minted
+# below — the default GITHUB_TOKEN would open PRs that trigger no CI,
+# silently skipping the checks that flag copier conflict markers for
+# resolution. The audit job runs on the default token deliberately, so
+# a repo whose bot credentials are broken still reports its drift.
 permissions: {}
 
 concurrency:
   group: template-update
 
 jobs:
-  update:
-    name: "copier update (agentic template)"
+  # Independent of the update and of the app token (#134): every path to
+  # loudness used to sit downstream of token minting, so the repos that
+  # could not authenticate — the ones most likely to be behind — died
+  # before the drift was ever named. This job needs only read access and
+  # runs on every trigger; only the weekly run turns drift into failure,
+  # because on the dispatch path being behind is the expected state the
+  # update job is about to fix.
+  audit:
+    name: "template drift audit"
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - name: Mint release-bot installation token
-        id: app-token
-        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
-        with:
-          app-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
-          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
-      - name: Skip if an update PR is already open
-        id: dedupe
+      - name: Report — is this repo actually on the latest template?
+        id: report
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          open_pr="$(gh pr list --state open --json headRefName,number,url,createdAt \
-            --jq 'map(select(.headRefName | startswith("chore/template-update-"))) | first')"
-          if [ -n "$open_pr" ] && [ "$open_pr" != "null" ]; then
-            echo "An update PR is already open — skipping the update run."
-            {
-              echo "skip=true"
-              echo "pr_url=$(echo "$open_pr" | jq -r .url)"
-              echo "pr_opened=$(echo "$open_pr" | jq -r .createdAt)"
-            } >> "$GITHUB_OUTPUT"
-          else
-            echo "skip=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      # The cron is the auditor, so it is the run that has to be loud. A
-      # repo can be behind for exactly two reasons, and both are failures
-      # of something rather than states to live with:
-      #
-      #   - an update PR is open and nobody merged it
-      #   - no PR at all, which means the release fan-out never arrived
-      #
-      # Neither is visible from a green weekly run, and "quietly behind"
-      # is the state this whole mechanism exists to prevent.
-      - name: Audit — is this repo actually on the latest template?
-        if: github.event_name == 'schedule'
-        id: audit
-        env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PR_URL: ${{ steps.dedupe.outputs.pr_url }}
-          PR_OPENED: ${{ steps.dedupe.outputs.pr_opened }}
         run: |
           set -euo pipefail
           answers_file=".copier-answers.agentic.yml"
@@ -81,23 +57,102 @@ jobs:
 
           latest="$(gh release view --repo "$template_repo" --json tagName --jq .tagName)"
 
+          open_pr="$(gh pr list --state open --json headRefName,url,createdAt \
+            --jq 'map(select(.headRefName | startswith("chore/template-update-"))) | first')"
+
           if [ "$stamped" = "$latest" ]; then
             echo "On the latest template ($latest)."
             echo "drift=false" >> "$GITHUB_OUTPUT"
-          elif [ -n "${PR_URL:-}" ]; then
-            echo "::error::Out of date: stamped $stamped, latest is $latest. An update PR has been open since $PR_OPENED and has not been merged: $PR_URL"
+          elif [ "${GITHUB_EVENT_NAME:-}" != "schedule" ]; then
+            # The dispatch that announces a release necessarily finds
+            # the repo behind it; that is delivery, not drift.
+            echo "Behind: stamped $stamped, latest is $latest — the update job should converge this run."
+            echo "drift=false" >> "$GITHUB_OUTPUT"
+          elif [ -n "$open_pr" ] && [ "$open_pr" != "null" ]; then
+            echo "::error::Out of date: stamped $stamped, latest is $latest. An update PR has been open since $(echo "$open_pr" | jq -r .createdAt) and has not been merged: $(echo "$open_pr" | jq -r .url)"
             echo "drift=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::error::Out of date: stamped $stamped, latest is $latest, and no update PR exists. The release fan-out did not reach this repo — check the dispatch step of the template's release job."
+            echo "::error::Out of date: stamped $stamped, latest is $latest, and no update PR exists. The release fan-out did not reach this repo — check the dispatch step of the template's release job, and this repo's bot credentials."
             echo "drift=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Fail the weekly audit if this repo is behind
+        if: github.event_name == 'schedule' && steps.report.outputs.drift == 'true'
+        run: |
+          echo "Weekly audit found this repo behind the template — see the annotation above."
+          exit 1
+
+  update:
+    name: "copier update (agentic template)"
+    runs-on: ubuntu-latest
+    steps:
+      # Named refusal before the octokit stack trace (#134): on GitHub
+      # Free, org variables and secrets do not reach private repos, and
+      # the mint step's own failure buries which variable was missing.
+      # The audit job above still reports drift on the default token.
+      - name: Refuse without release-bot credentials, naming the gap
+        env:
+          HAS_ID: ${{ vars.RELEASE_BOT_CLIENT_ID != '' }}
+          HAS_KEY: ${{ secrets.RELEASE_BOT_PRIVATE_KEY != '' }}
+        run: |
+          set -euo pipefail
+          if [ "$HAS_ID" != "true" ] || [ "$HAS_KEY" != "true" ]; then
+            [ "$HAS_ID" = "true" ] || echo "::error::vars.RELEASE_BOT_CLIENT_ID is empty in $GITHUB_REPOSITORY."
+            [ "$HAS_KEY" = "true" ] || echo "::error::secrets.RELEASE_BOT_PRIVATE_KEY is empty in $GITHUB_REPOSITORY."
+            echo "::error::On GitHub Free, org credentials do not reach private repos — each private repo needs its own copies (the credentials reconciler in meta seeds them). Template updates cannot run here until then."
+            exit 1
+          fi
+
+      - name: Mint release-bot installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-        if: steps.dedupe.outputs.skip == 'false'
         with:
           # Push the update branch as the app so the resulting PR runs CI.
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
+
+      # An open update PR used to stand the run down wholesale — a
+      # deadlock, not a guard (#134): a stale PR nobody merged blocked
+      # every subsequent release forever, and the repo most in need of
+      # an update was the one guaranteed not to get one. An update PR
+      # for the CURRENT release is genuine dedupe; one for an older
+      # release is superseded — closed with a comment — and the run
+      # proceeds to open the current one.
+      - name: Skip on a current update PR, supersede a stale one
+        id: dedupe
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          answers_file=".copier-answers.agentic.yml"
+          src_path="$(awk '$1 == "_src_path:" {print $2}' "$answers_file")"
+          template_repo="${src_path#gh:}"
+          template_repo="${template_repo#https://github.com/}"
+          template_repo="${template_repo%.git}"
+          latest="$(gh release view --repo "$template_repo" --json tagName --jq .tagName)"
+
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          while read -r number head url; do
+            [ -z "$number" ] && continue
+            if [ "$head" = "chore/template-update-$latest" ]; then
+              echo "An update PR for the current release is already open — skipping: $url"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            else
+              gh pr close "$number" \
+                --comment "Superseded by the $latest update — a stale update PR must not block newer releases (agentic-engineering-template#134). The current update PR follows." \
+                --delete-branch \
+                || gh pr close "$number" \
+                  --comment "Superseded by the $latest update — a stale update PR must not block newer releases (agentic-engineering-template#134). The current update PR follows."
+              echo "Superseded stale update PR $url"
+            fi
+          done < <(gh pr list --state open --json headRefName,number,url \
+            --jq '.[] | select(.headRefName | startswith("chore/template-update-")) | "\(.number) \(.headRefName) \(.url)"')
 
       - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
         if: steps.dedupe.outputs.skip == 'false'
@@ -209,12 +264,3 @@ jobs:
             --title "chore: update agentic template to $NEW_REF" \
             --body-file /tmp/pr-body.md \
             --head "$branch"
-
-      # Last, not at the audit: a drifted repo with no PR still needs the
-      # update run above to open one. Failing early would report the
-      # problem and then decline to fix it.
-      - name: Fail the audit if this repo is behind
-        if: github.event_name == 'schedule' && steps.audit.outputs.drift == 'true'
-        run: |
-          echo "Weekly audit found this repo behind the template — see the annotation above."
-          exit 1
