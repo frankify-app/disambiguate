@@ -1,0 +1,75 @@
+# The uniform CI gate (agentic-engineering-template#137, #143).
+#
+# `ci-ok` is the ONE context branch protection requires, everywhere,
+# forever: it discovers every pull_request-triggered workflow on this
+# head SHA at runtime and fails unless every one of their jobs
+# succeeded — adding or renaming a job changes nothing here, which is
+# the point. The ticket and review-answers gates ride the same vehicle
+# so the required-context list never grows.
+#
+# Label, body and review events re-run only THIS workflow — the gate
+# re-judges without re-running the test matrix.
+name: CI gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+
+concurrency:
+  group: ci-ok-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  ticket:
+    name: "ticket reference"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      # Reads only the event payload and the central keyword file:
+      # the allow-list is exact ALL CAPS (ADVANCES/CLOSES/FIXES — rendered here
+      # from reference-keywords.json, the single source), any native
+      # closing keyword in any other casing fails the PR, and the only
+      # escape is the `automated` label on a bot-authored PR.
+      - name: The PR names its tickets canonically
+        env:
+          REFERENCE_KEYWORDS: .github/reference-keywords.json
+        run: python3 scripts/ci/check_gate.py ticket
+
+  review-answers:
+    name: "review answers"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      # Every review thread opened by a human needs a PR-author reply
+      # carrying a full commit URL verified against this PR's commits,
+      # or a line starting `No commit:` followed by
+      # the reason (the marker is rendered from reference-keywords.json,
+      # the single source). Resolving a thread is not answering it (#143).
+      - name: Every human review thread is answered
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REFERENCE_KEYWORDS: .github/reference-keywords.json
+        run: python3 scripts/ci/check_gate.py reviews
+
+  ci-ok:
+    name: "ci-ok"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Every job of every PR workflow succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python3 scripts/ci/check_gate.py aggregate
