@@ -116,14 +116,13 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
           fetch-depth: 0
 
-      # An open update PR used to stand the run down wholesale — a
-      # deadlock, not a guard (#134): a stale PR nobody merged blocked
-      # every subsequent release forever, and the repo most in need of
-      # an update was the one guaranteed not to get one. An update PR
-      # for the CURRENT release is genuine dedupe; one for an older
-      # release is superseded — closed with a comment — and the run
-      # proceeds to open the current one.
-      - name: Skip on a current update PR, supersede a stale one
+      # An open update PR for the CURRENT release is genuine dedupe. A
+      # stale one is JOINED (#137): its branch is checked out and the
+      # new release lands as a commit ON it — the PR, its discussion and
+      # the conflict resolutions already on the branch all survive.
+      # Closing it would throw that branch work away; skipping wholesale
+      # would let a PR nobody merged block every later release (#134).
+      - name: Skip on a current update PR, join a stale one
         id: dedupe
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -144,12 +143,13 @@ jobs:
               echo "An update PR for the current release is already open — skipping: $url"
               echo "skip=true" >> "$GITHUB_OUTPUT"
             else
-              gh pr close "$number" \
-                --comment "Superseded by the $latest update — a stale update PR must not block newer releases (agentic-engineering-template#134). The current update PR follows." \
-                --delete-branch \
-                || gh pr close "$number" \
-                  --comment "Superseded by the $latest update — a stale update PR must not block newer releases (agentic-engineering-template#134). The current update PR follows."
-              echo "Superseded stale update PR $url"
+              git fetch origin "$head"
+              git checkout -B "$head" "origin/$head"
+              {
+                echo "existing_branch=$head"
+                echo "existing_pr=$number"
+              } >> "$GITHUB_OUTPUT"
+              echo "Joining open update PR $url — the $latest update lands as a commit on it."
             fi
           done < <(gh pr list --state open --json headRefName,number,url \
             --jq '.[] | select(.headRefName | startswith("chore/template-update-")) | "\(.number) \(.headRefName) \(.url)"')
@@ -186,15 +186,17 @@ jobs:
             echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Open update PR
+      - name: Open update PR, or land the commit on the joined one
         if: steps.dedupe.outputs.skip == 'false' && steps.update.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           OLD_REF: ${{ steps.update.outputs.old_ref }}
           NEW_REF: ${{ steps.update.outputs.new_ref }}
+          EXISTING_BRANCH: ${{ steps.dedupe.outputs.existing_branch }}
+          EXISTING_PR: ${{ steps.dedupe.outputs.existing_pr }}
         run: |
           set -euo pipefail
-          branch="chore/template-update-$NEW_REF"
+          branch="${EXISTING_BRANCH:-chore/template-update-$NEW_REF}"
           head="$(git rev-parse HEAD)"
 
           # The commit is created through the API, not the git CLI:
@@ -204,8 +206,10 @@ jobs:
           # are still committed as copier's inline markers on purpose:
           # the PR opens either way and red CI flags them for resolution
           # on the branch, so updates never silently stall.
-          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f ref="refs/heads/$branch" -f sha="$head" --silent
+          if [ -z "$EXISTING_BRANCH" ]; then
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/heads/$branch" -f sha="$head" --silent
+          fi
 
           git add -A
           printf '[]' > /tmp/additions.json
@@ -260,7 +264,28 @@ jobs:
             echo "$changelog"
           } > /tmp/pr-body.md
 
-          gh pr create \
-            --title "chore: update agentic template to $NEW_REF" \
-            --body-file /tmp/pr-body.md \
-            --head "$branch"
+          # The ticket gate's designed escape (#137): a bot-authored PR
+          # carrying the `automated` label needs no ticket reference — a
+          # template update traces to a release, not a ticket. The label
+          # is ensured first because this very PR can be the one that
+          # delivers labels.toml's entry to the repo.
+          gh label create automated \
+            --color ededed \
+            --description "Bot-authored maintenance PR; the ticket gate's designed escape" \
+            || true
+
+          # A joined PR is refreshed in place — title, body and label
+          # brought to the new release — so one PR carries the update
+          # conversation however many releases pass through it.
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr edit "$EXISTING_PR" \
+              --title "chore: update agentic template to $NEW_REF" \
+              --body-file /tmp/pr-body.md \
+              --add-label automated
+          else
+            gh pr create \
+              --title "chore: update agentic template to $NEW_REF" \
+              --body-file /tmp/pr-body.md \
+              --head "$branch" \
+              --label automated
+          fi

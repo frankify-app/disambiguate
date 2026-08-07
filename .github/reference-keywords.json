@@ -1,0 +1,21 @@
+{
+  "comment": "The canonical ticket-reference keywords (AET#137). ALL CAPS, exact: CLOSES and FIXES close on merge (they are native closing keywords), ADVANCES references a multi-PR ticket without closing it (deliberately NOT native). github_native is the forge's own closing-keyword list, platform-owned: any of them in any non-canonical casing fails the gate, because the forge would act on them whether or not the gate recognized the reference. branch_pattern is the agent branch shape whose first group captures the dash-joined ticket numbers that must appear in the body. no_commit_marker is the exact reply prefix that answers a review thread without a commit (AET#143).",
+  "allowed": {
+    "CLOSES": "closing",
+    "FIXES": "closing",
+    "ADVANCES": "non-closing"
+  },
+  "github_native": [
+    "close",
+    "closes",
+    "closed",
+    "fix",
+    "fixes",
+    "fixed",
+    "resolve",
+    "resolves",
+    "resolved"
+  ],
+  "branch_pattern": "claude/(\\d+(?:-\\d+)*)-",
+  "no_commit_marker": "No commit:"
+}
