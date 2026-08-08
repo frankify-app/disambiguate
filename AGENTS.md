@@ -134,6 +134,21 @@ Code-specific skills:
 - Never push to `main`
 - Create PR immediately on branch creation
 - Commits: conventional commits
+- **Ticket references in PR bodies are ALL CAPS, from the central list**
+  (`.github/reference-keywords.json`, enforced by the `ticket` job):
+  `CLOSES #n` / `FIXES #n` close on merge,
+  `ADVANCES #n` references a
+  multi-PR ticket without closing it. Any native closing keyword
+  (close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved) in any other casing fails
+  the gate — the forge would act on it whether or not the gate
+  recognized the reference. Every ticket number in a
+  `claude/(\d+(?:-\d+)*)-` branch must appear as a canonical
+  reference in the body.
+- **Answer every review comment with a full commit URL or `No commit: <why>`**
+  (enforced by the `review-answers` job): the commit URL must be a real
+  commit on the PR — verify with `git rev-parse` before pasting, never
+  expand a short hash from memory — and resolving a thread is not
+  answering it.
 - Document unexpected encounters and design decisions in commit message as well as PR/Issue
 - **A push rejected over a commit you did not write is rebased around, never forced.**
   Branch rules re-evaluate every commit an update spans, not just the new ones,
