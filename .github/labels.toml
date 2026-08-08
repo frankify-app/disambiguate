@@ -75,3 +75,8 @@ description = "Pull requests that update a dependency file"
 color = "000000"
 name = "github_actions"
 description = "Update of github actions"
+
+[automated]
+color = "ededed"
+name = "automated"
+description = "Bot-authored maintenance PR; the ticket gate's designed escape"
