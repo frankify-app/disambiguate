@@ -12,3 +12,15 @@ Using an avoided-term in prose where the canonical term is meant is
 names the canonical term to use instead. The `_Avoid_:` line is the single
 source of truth — it is rendered to readers and parsed by the checker
 alike (ADR 0001).
+
+Aliases match exactly, on word boundaries. No inflection is inferred, so a
+plural is a separate alias: declaring `backlink` does not catch
+`backlinks`. Declare each form the prose might use. Aliases may be several
+words (`dependency order`), and matching skips code spans, fences, and
+existing links like every other drift-check. <!-- d10e: ignore[unlinked-term] drift-check -->
+<!-- The mention above stays plain deliberately: drift-check.md already
+     links this term, and linking back would make the dependency graph
+     cyclic, which the resolver rejects. -->
+
+An `_Avoid_:` line inside a code fence or span is an example, not a
+declaration — a document may show the grammar without adopting it.

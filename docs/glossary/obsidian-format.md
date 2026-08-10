@@ -1,5 +1,10 @@
 ## Obsidian format
 
+<!-- This document describes Obsidian, so it uses Obsidian's own
+     vocabulary — "backlink" here names the feature its graph view
+     renders, not a cross-reference. -->
+<!-- d10e: ignore-file[wrong-alias] -->
+
 The [glossary-format](glossary-format.md) variant intended for use as an
 Obsidian vault. Terms live in a folder inside the vault, browsed and edited
 through Obsidian.
