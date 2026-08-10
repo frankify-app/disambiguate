@@ -29,7 +29,6 @@ from .baseline import (
     BASELINE_FILENAME,
     apply_baseline,
     load_baseline,
-    prune_baseline,
     save_baseline,
 )
 from .discovery import (
@@ -370,15 +369,7 @@ def _run_drift(glossary: Glossary, roots: list[Path], write_baseline: bool) -> i
 
     baseline = load_baseline(baseline_path)
     if baseline is not None:
-        findings, stale_keys = apply_baseline(findings, baseline)
-        if stale_keys:
-            # Fixed findings must not leave permanently stale baseline
-            # entries; the baseline only ever shrinks on a normal run.
-            prune_baseline(baseline, stale_keys)
-            print(
-                f"pruned {len(stale_keys)} fixed finding(s) from {baseline.path}",
-                file=sys.stderr,
-            )
+        findings, _stale_keys = apply_baseline(findings, baseline)
 
     if not findings:
         return EXIT_OK
