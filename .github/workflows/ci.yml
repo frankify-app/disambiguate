@@ -60,6 +60,29 @@ jobs:
       - run: uv run pytest tests
         shell: bash
 
+  # Runs the tool against this repository's own glossary and prose. The
+  # unit suite proves the checks work on fixtures; this proves they hold
+  # on the real corpus, which is the only place drift actually appears.
+  # `--drift` is read-only (adr 0002), so nothing here writes back.
+  dogfood:
+    name: "dogfood (lint + drift)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6.0.2
+      # setup-uv pins UV_PYTHON but installs no interpreter, and the sync
+      # below forbids downloading one — so the Python comes from here, as
+      # in the test job.
+      - uses: actions/setup-python@v6.2.0
+        with:
+          python-version: "3.13"
+      - uses: astral-sh/setup-uv@v8.1.0
+        with:
+          python-version: "3.13"
+      - run: uv sync --no-python-downloads
+        shell: bash
+      - run: make dogfood
+        shell: bash
+
 # release:
 #   needs:
 #     - test
