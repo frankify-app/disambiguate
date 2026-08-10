@@ -258,6 +258,9 @@ def extract_avoided_terms(text: str) -> list[str]:
     The grammar (ADR 0001): a single line starting with the literal
     `_Avoid_:` prefix, followed by comma-separated aliases.
 
+    A line inside a code fence or span is an example, not a declaration —
+    documenting the grammar must not enrol the document in it.
+
     text: raw markdown contents of a term file.
 
     Returns
@@ -266,7 +269,7 @@ def extract_avoided_terms(text: str) -> list[str]:
     is present.
 
     """
-    match = _AVOID_LINE_RE.search(text)
+    match = _AVOID_LINE_RE.search(_strip_code(text))
     if match is None:
         return []
     return [

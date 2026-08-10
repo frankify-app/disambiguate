@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from disambiguate.parser import ParsedTerm, parse_term_text
 
 
@@ -159,7 +157,6 @@ def test_extract_avoided_terms_absent_line_gives_empty_list() -> None:
     assert extract_avoided_terms("## Widget\n\nA widget.\n") == []
 
 
-@pytest.mark.xfail(strict=True, reason="the avoid line is matched inside fences")
 def test_extract_avoided_terms_ignores_a_fenced_example() -> None:
     """An `_Avoid_:` line shown as a code example is not a declaration."""
     from disambiguate.parser import extract_avoided_terms
