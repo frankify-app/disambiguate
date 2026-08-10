@@ -457,7 +457,6 @@ def test_new_drift_not_in_baseline_fails(tmp_path: Path) -> None:
     assert "guide.md" not in stderr
 
 
-@pytest.mark.xfail(strict=True, reason="normal runs still auto-prune")
 def test_normal_drift_run_does_not_rewrite_the_baseline(tmp_path: Path) -> None:
     """A read-only --drift run leaves the tracked baseline byte-identical."""
     project = _drifted_project(tmp_path)
