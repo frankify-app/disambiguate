@@ -76,8 +76,8 @@ runs the [resolver](docs/glossary/resolver.md) to produce
 backs [from-mode](docs/glossary/from-mode.md) and `--explain`.
 
 `--drift` detects [drift](docs/glossary/drift.md) — prose that uses the
-vocabulary without following it: terms mentioned but never linked, and
-forbidden synonyms used in place of the canonical term. Each
+vocabulary without following it: terms mentioned but never linked, and (as
+the checks grow) forbidden synonyms and wrong casing. Each
 [drift-check](docs/glossary/drift-check.md) reports fatal findings named by
 a stable [rule-code](docs/glossary/rule-code.md); false positives are
 silenced precisely with [ignore-hints](docs/glossary/ignore-hint.md), and

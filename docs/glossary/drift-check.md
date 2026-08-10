@@ -16,11 +16,13 @@ Shipped drift-checks:
 - `wrong-alias`: prose uses an [avoided-term](avoided-term.md) — a
   forbidden synonym — where the canonical term is meant. The finding names
   the canonical term to use instead.
-A capitalization check (`term-case`) was specified in T5 (#39) and is not
-shipped. Expected casing was derived from the term's H2 heading, but a
-single-word heading gives no evidence either way — every H2 capitalizes
-its first letter, so a genuine proper noun like `Disambiguate` is
-indistinguishable from heading style and derives as a common noun. On this
-repo the rule's only findings were that misclassification, so it fired on
-nothing true. It needs the per-term override from backlog B2 (#41) to
-classify correctly; #39 stays open until then.
+- `term-case`: a mid-sentence term-mention written with casing that
+  disagrees with the term's H2 heading. Expected casing is derived from
+  the heading: an internal capital (`GitHub`) or a capitalized non-first
+  word (`Term Case`) marks a proper noun kept verbatim; otherwise the
+  heading capital is heading style and prose expects lowercase.
+  Sentence-initial mentions are always skipped — a capital there is
+  grammar, not drift. Single-word proper nouns whose only capital is the
+  first letter (`Disambiguate`) are indistinguishable from heading style
+  and derive as common nouns; the per-term override planned in backlog
+  B2 (#41) is the escape hatch beyond suppression.

@@ -142,6 +142,119 @@ def _check_wrong_aliases(
     return findings
 
 
+def _is_proper_noun(name: str) -> bool:
+    """
+    Derive proper-noun-ness from a term's H2 canonical name.
+
+    A name is proper when any word carries a capital beyond the heading
+    convention: an internal capital ("GitHub") or a capitalized non-first
+    word ("Term Case"). A single leading capital on the first word is
+    heading style, not evidence ("Widget" stays a common noun).
+
+    DECISION:SCOPE — the ticket's "Title-Cased H2 implies proper noun" is
+    undecidable for single-word H2s (every H2 here capitalizes its first
+    letter), so single-leading-capital derives as common noun. Known
+    misclassification: "Disambiguate". Escape hatches: suppression,
+    baseline, backlog B2 override.
+    """
+    words = name.split()
+    for index, word in enumerate(words):
+        if any(ch.isupper() for ch in word[1:]):
+            return True
+        if index > 0 and word[:1].isupper():
+            return True
+    return False
+
+
+def _expected_prose_forms(term: Term) -> set[str]:
+    """
+    Return the spellings of `term` accepted in mid-sentence prose.
+
+    Common nouns expect the H2 name with its heading capital lowered;
+    proper nouns expect the H2 name verbatim. The hyphenated slug is also
+    accepted when it is not merely a case-variant of the name (an
+    identifier-shaped reference like `github-format` reads deliberately;
+    a bare lowercase `github` for proper-noun "GitHub" does not).
+    """
+    name = term.canonical_name or term.slug
+    forms: set[str] = set()
+    if _is_proper_noun(name):
+        forms.add(name)
+        if term.slug.lower() != name.lower():
+            forms.add(term.slug)
+    else:
+        first, _, rest = name.partition(" ")
+        lowered = first.lower() + (" " + rest if rest else "")
+        forms.add(lowered)
+        forms.add(term.slug)
+    return forms
+
+
+_SENTENCE_ENDERS = set(".!?:;")
+_MARKDOWN_MARKERS = set("-*+>#|")
+
+
+def _is_sentence_initial(text: str, offset: int) -> bool:
+    """
+    Return True when the mention at `offset` starts a sentence or a line.
+
+    A capital there is grammar, not drift. Sentence-initial means: start
+    of text, after sentence-ending punctuation, or first word after a
+    markdown structural marker (list bullet, blockquote, heading, table
+    pipe) or an empty line.
+    """
+    index = offset - 1
+    while index >= 0 and text[index] in " \t":
+        index -= 1
+    if index < 0 or text[index] == "\n":
+        return True
+    previous = text[index]
+    return previous in _SENTENCE_ENDERS or previous in _MARKDOWN_MARKERS
+
+
+def _check_term_case(glossary: Glossary, corpus: dict[Path, str]) -> list[DriftFinding]:
+    """
+    Report mid-sentence term-mentions whose casing disagrees with the H2.
+
+    One finding per (document, term) at the first offending mention.
+    Sentence-initial mentions are skipped entirely. A term is never
+    checked against its own defining file.
+    """
+    findings: list[DriftFinding] = []
+    for path in sorted(corpus):
+        text = corpus[path]
+        for slug in sorted(glossary.terms):
+            term = glossary.terms[slug]
+            if path == term.path.resolve():
+                continue
+            expected = _expected_prose_forms(term)
+            offending = [
+                mention
+                for mention in find_mentions(text, _term_variants(term))
+                if mention.matched not in expected
+                and not _is_sentence_initial(text, mention.offset)
+            ]
+            if not offending:
+                continue
+            first = offending[0]
+            options = " or ".join(sorted(f"'{form}'" for form in expected))
+            findings.append(
+                DriftFinding(
+                    rule_code="term-case",
+                    path=path,
+                    line=first.line,
+                    term=slug,
+                    message=(
+                        f"{first.matched!r} disagrees with the casing "
+                        f"derived from the term's heading; write {options} "
+                        f"mid-sentence, or suppress with "
+                        f"<!-- d10e: ignore[term-case] {slug} -->"
+                    ),
+                )
+            )
+    return findings
+
+
 def _read_corpus(glossary: Glossary, roots: list[Path]) -> dict[Path, str]:
     """Read every document reachable from `roots` into memory, keyed by path."""
     corpus: dict[Path, str] = {}
@@ -171,6 +284,7 @@ def run_drift_checks(
     corpus = _read_corpus(glossary, roots)
     raw_findings = _check_unlinked_terms(glossary, corpus)
     raw_findings.extend(_check_wrong_aliases(glossary, corpus))
+    raw_findings.extend(_check_term_case(glossary, corpus))
     return _apply_suppressions(raw_findings, corpus, config)
 
 
