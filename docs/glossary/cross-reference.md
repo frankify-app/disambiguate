@@ -41,3 +41,5 @@ the finding off.
 Tickets declare their new vocabulary the same way: an `Introduces:` list
 naming each new term as a slug, each linked as if it existed. The list is
 the durable record of the vocabulary a ticket intends to add.
+
+_Avoid_: backlink, backlinks, back-reference, xref

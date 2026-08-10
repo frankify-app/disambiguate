@@ -12,3 +12,5 @@ re-runs, but not the only one possible.
 Computed using `graphlib.TopologicalSorter` from the Python standard library.
 A cycle in the dependency graph makes topological ordering impossible and is
 reported as a lint error.
+
+_Avoid_: dependency order, sorted order
