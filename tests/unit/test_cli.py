@@ -469,3 +469,19 @@ def test_normal_drift_run_does_not_rewrite_the_baseline(tmp_path: Path) -> None:
     )
     _run(["--drift"], project)
     assert baseline.read_text(encoding="utf-8") == before
+
+
+@pytest.mark.xfail(strict=True, reason="stale baseline entries are still silent")
+def test_stale_baseline_entry_is_fatal_and_names_the_flag(tmp_path: Path) -> None:
+    """A baseline entry whose finding is fixed fails the run, naming the fix."""
+    project = _drifted_project(tmp_path)
+    _run(["--drift", "--write-baseline"], project)
+    (tmp_path / "guide.md").write_text(
+        "Sort in [topological order](docs/glossary/topological-order.md).\n",
+        encoding="utf-8",
+    )
+    code, _, stderr = _run(["--drift"], project)
+    assert code == 1
+    assert "stale-baseline" in stderr
+    assert "guide.md:unlinked-term:topological-order" in stderr
+    assert "--write-baseline" in stderr
