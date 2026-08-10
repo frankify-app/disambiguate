@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from disambiguate.drift import run_drift_checks
 from disambiguate.glossary import load_glossary
 
@@ -522,3 +524,15 @@ def test_hint_examples_inside_code_are_not_live_hints(tmp_path: Path) -> None:
     glossary = load_glossary(glossary_dir)
     findings = run_drift_checks(glossary, roots=[root])
     assert [f.rule_code for f in findings] == ["unlinked-term"]
+
+
+@pytest.mark.xfail(strict=True, reason="headings are matched as prose")
+def test_mention_inside_a_heading_is_not_drift(tmp_path: Path) -> None:
+    """A heading naming a term is a title, not prose that should link it."""
+    glossary_dir, root = _widget_project(
+        tmp_path,
+        "## The Widget Registry\n\nNothing else here.\n",
+    )
+    glossary = load_glossary(glossary_dir)
+    findings = run_drift_checks(glossary, roots=[root])
+    assert [f for f in findings if f.rule_code == "unlinked-term"] == []
