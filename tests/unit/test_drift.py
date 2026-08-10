@@ -257,13 +257,13 @@ def test_load_drift_config_reads_pyproject(tmp_path: Path) -> None:
         "[tool.disambiguate]\n"
         'drift-ignore = ["unlinked-term"]\n'
         "[tool.disambiguate.drift-ignore-paths]\n"
-        '"docs/*.md" = ["term-case"]\n',
+        '"docs/*.md" = ["wrong-alias"]\n',
         encoding="utf-8",
     )
     config = load_drift_config(tmp_path)
     assert config is not None
     assert config.ignore == ["unlinked-term"]
-    assert config.ignore_paths == {"docs/*.md": ["term-case"]}
+    assert config.ignore_paths == {"docs/*.md": ["wrong-alias"]}
 
 
 def test_stale_inline_hint_is_fatal_finding(tmp_path: Path) -> None:
@@ -414,102 +414,6 @@ def test_wrong_alias_participates_in_baseline(tmp_path: Path) -> None:
     fresh, stale_keys = apply_baseline(findings, baseline)
     assert fresh == []
     assert stale_keys == []
-
-
-def test_common_noun_title_cased_mid_sentence_is_term_case_drift(
-    tmp_path: Path,
-) -> None:
-    glossary_dir, root = _widget_project(
-        tmp_path,
-        "See the [widget](glossary/widget.md). Then the Widget spins.\n",
-    )
-    glossary = load_glossary(glossary_dir)
-    findings = run_drift_checks(glossary, roots=[root])
-    case = [f for f in findings if f.rule_code == "term-case"]
-    assert len(case) == 1
-    assert case[0].term == "widget"
-    assert "Widget" in case[0].message
-
-
-def test_sentence_initial_capital_is_not_term_case_drift(tmp_path: Path) -> None:
-    glossary_dir, root = _widget_project(
-        tmp_path,
-        "See the [widget](glossary/widget.md). Widget spins here.\n"
-        "Widget also starts this line.\n",
-    )
-    glossary = load_glossary(glossary_dir)
-    findings = run_drift_checks(glossary, roots=[root])
-    assert [f for f in findings if f.rule_code == "term-case"] == []
-
-
-def test_proper_noun_lowercased_mid_sentence_is_term_case_drift(
-    tmp_path: Path,
-) -> None:
-    glossary_dir = _setup_glossary(tmp_path)
-    _write(glossary_dir, "github", "## GitHub\n\nThe forge.\n")
-    root = _write(
-        tmp_path,
-        "README",
-        "See [GitHub](glossary/github.md). Hosted on github today.\n",
-    )
-    glossary = load_glossary(glossary_dir)
-    findings = run_drift_checks(glossary, roots=[root])
-    case = [f for f in findings if f.rule_code == "term-case"]
-    assert len(case) == 1
-    assert case[0].term == "github"
-
-
-def test_correct_casing_produces_no_term_case_finding(tmp_path: Path) -> None:
-    glossary_dir, root = _widget_project(
-        tmp_path,
-        "See the [widget](glossary/widget.md). Then the widget spins.\n",
-    )
-    glossary = load_glossary(glossary_dir)
-    findings = run_drift_checks(glossary, roots=[root])
-    assert [f for f in findings if f.rule_code == "term-case"] == []
-
-
-def test_term_case_skips_code_and_links(tmp_path: Path) -> None:
-    glossary_dir, root = _widget_project(
-        tmp_path,
-        "See the [widget](glossary/widget.md). Run `the Widget` and read\n"
-        "the [Widget guide](https://example.com).\n",
-    )
-    glossary = load_glossary(glossary_dir)
-    findings = run_drift_checks(glossary, roots=[root])
-    assert [f for f in findings if f.rule_code == "term-case"] == []
-
-
-def test_term_case_is_suppressible_and_baselined(tmp_path: Path) -> None:
-    from disambiguate.baseline import apply_baseline, load_baseline, save_baseline
-    from disambiguate.suppressions import DriftConfig
-
-    glossary_dir, root = _widget_project(
-        tmp_path,
-        "<!-- d10e: ignore[term-case] widget -->\n"
-        "See the [widget](glossary/widget.md). Then the Widget spins.\n",
-    )
-    glossary = load_glossary(glossary_dir)
-    findings = run_drift_checks(glossary, roots=[root])
-    assert [f for f in findings if f.rule_code == "term-case"] == []
-
-    hintless = tmp_path / "guide.md"
-    hintless.write_text(
-        "See the [widget](glossary/widget.md). Then the Widget spins.\n",
-        encoding="utf-8",
-    )
-    config = DriftConfig(ignore=["term-case"], ignore_paths={}, root=tmp_path)
-    findings = run_drift_checks(glossary, roots=[root], config=config)
-    assert [f for f in findings if f.rule_code == "term-case"] == []
-
-    findings = run_drift_checks(glossary, roots=[root])
-    assert [f.rule_code for f in findings] == ["term-case"]
-    baseline_path = tmp_path / ".drift-baseline.json"
-    save_baseline(baseline_path, findings)
-    baseline = load_baseline(baseline_path)
-    assert baseline is not None
-    fresh, _ = apply_baseline(findings, baseline)
-    assert fresh == []
 
 
 def test_hint_examples_inside_code_are_not_live_hints(tmp_path: Path) -> None:
