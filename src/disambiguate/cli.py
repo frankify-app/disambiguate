@@ -40,7 +40,7 @@ from .discovery import (
     find_repo_root,
     resolve_default_root,
 )
-from .drift import run_drift_checks
+from .drift import DriftFinding, run_drift_checks
 from .from_mode import BrokenFromLinkError, extract_slugs
 from .glossary import DuplicateSlugError, Glossary, load_glossary
 from .lint import lint_glossary
@@ -351,8 +351,10 @@ def _run_drift(glossary: Glossary, roots: list[Path], write_baseline: bool) -> i
 
     Returns
     -------
-    EXIT_OK when no fresh finding remains (baselined findings are
-    non-fatal; stale baseline entries are auto-pruned), else EXIT_FAILURE.
+    EXIT_OK when no fresh finding remains; baselined findings are
+    non-fatal, but a baseline entry matching nothing anymore is itself a
+    fatal `stale-baseline` finding. Without `--write-baseline` the run
+    never writes, so it is safe to run anywhere.
 
     """
     config = load_drift_config(Path.cwd())
@@ -369,7 +371,25 @@ def _run_drift(glossary: Glossary, roots: list[Path], write_baseline: bool) -> i
 
     baseline = load_baseline(baseline_path)
     if baseline is not None:
-        findings, _stale_keys = apply_baseline(findings, baseline)
+        findings, stale_keys = apply_baseline(findings, baseline)
+        # A grandfathered finding that no longer occurs must not stay
+        # excused, or the drift could silently return. Reported like a
+        # stale suppression rather than pruned in place: the shrink has to
+        # land in the baseline file in git, and a run that rewrote it would
+        # only do so in whichever checkout happened to run the command.
+        findings.extend(
+            DriftFinding(
+                rule_code="stale-baseline",
+                path=baseline.path,
+                line=1,
+                term="",
+                message=(
+                    f"baseline entry {key!r} matches no finding anymore; "
+                    f"regenerate with --drift --write-baseline"
+                ),
+            )
+            for key in stale_keys
+        )
 
     if not findings:
         return EXIT_OK
