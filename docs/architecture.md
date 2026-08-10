@@ -94,8 +94,9 @@ scope — parsing, precedence, and stale-suppression detection live in
 stderr with their [rule-code](glossary/rule-code.md); exit code 1 if any.
 Findings recorded in the checked-in
 [drift-baseline](glossary/drift-baseline.md)
-([baseline.py](../src/disambiguate/baseline.py)) are non-fatal and
-auto-pruned once fixed; `--drift --write-baseline` regenerates the file.
+([baseline.py](../src/disambiguate/baseline.py)) are non-fatal; an entry
+matching nothing anymore is a fatal `stale-baseline` finding. Only
+`--drift --write-baseline` writes the file — a plain run is read-only.
 Drift-checks are deliberately separate from `--lint`: lint validates the
 glossary, drift validates the prose that uses it.
 
