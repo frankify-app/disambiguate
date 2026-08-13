@@ -276,6 +276,9 @@ The modes below are the kinds of work the user will ask for. **Each runs in its 
   - Any obstacles that diverged from the initial plan, and — in the rare event spec deviation was unavoidable — what deviated and why.
   - All `DECISION:` markers present in the diff, rendered per the `documenting-decisions` skill format.
 - Check CI → `gh run list` / `gh run view` (or `gh pr checks` once the PR exists).
+  Judge CI by the **newest check run per check name**, not per workflow run:
+  a head commit can accumulate several runs of the same check (re-runs, retriggers),
+  and a stale red run coexisting with a newer green one is a pass, not a failure.
 - If CI fails, fix it by re-entering this **Implement** workflow.
 
 #### Review

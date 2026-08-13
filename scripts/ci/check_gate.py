@@ -198,10 +198,37 @@ def warn_premature_close(body, config, repo, number, token):
             )
 
 
+def live_pr(payload, token):
+    """The PR as it is NOW, falling back to the event's snapshot.
+
+    The payload is frozen when the run is created, and a re-run replays
+    that same payload — so a body corrected after a red run stays
+    invisible to every re-run of it, and the gate fails forever for a
+    reason that no longer exists (#159). Only the number is taken from
+    the event; everything judged is read live.
+
+    A read that fails leaves the payload in place: the gate judges a
+    possibly-stale body rather than erroring, which is the same verdict
+    it gave before this existed, and never a pass it did not earn.
+    """
+    if not token:
+        return payload
+    try:
+        fresh = fetch(
+            f"/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{payload['number']}", token
+        )
+    except OSError as err:
+        print(
+            f"::notice::could not read the live pull request ({err}) — judging the event payload"
+        )
+        return payload
+    return fresh
+
+
 def run_ticket():
     with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
         event = json.load(handle)
-    pr = event["pull_request"]
+    pr = live_pr(event["pull_request"], os.environ.get("GH_TOKEN"))
     config = reference_config()
     problems, escaped = ticket_violations(
         pr.get("body"),
