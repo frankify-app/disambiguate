@@ -1,5 +1,5 @@
 # Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
-_commit: v4.0.1
+_commit: v4.1.0
 _src_path: https://github.com/pandoscope/agentic-engineering-template
 agentic_disambiguate_roots: ''
 agentic_disambiguate_version: 0.3.0
