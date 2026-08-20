@@ -29,7 +29,7 @@ Cross-references inside fenced code blocks or inline code spans are
 ignored — code samples that happen to contain link-shaped text do not
 create edges.
 
-## Link-as-if-exists
+### Link-as-if-exists
 
 A new domain concept is introduced by writing a cross-reference to its
 [slug](slug.md) *as if the term file already existed*. Until the file
