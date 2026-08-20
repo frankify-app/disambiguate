@@ -142,3 +142,27 @@ def test_auto_prune_marker_is_parsed_as_consent() -> None:
 
     plain = parse_term_text("grilling", "## Grilling\n\nThe interview loop.\n")
     assert plain.auto_prune is False
+
+
+def test_extract_avoided_terms_parses_comma_separated_line() -> None:
+    from disambiguate.parser import extract_avoided_terms
+
+    text = "## Widget\n\nA widget.\n\n_Avoid_: gadget, thing-a-majig\n"
+    assert extract_avoided_terms(text) == ["gadget", "thing-a-majig"]
+
+
+def test_extract_avoided_terms_absent_line_gives_empty_list() -> None:
+    from disambiguate.parser import extract_avoided_terms
+
+    assert extract_avoided_terms("## Widget\n\nA widget.\n") == []
+
+
+def test_extract_avoided_terms_ignores_a_fenced_example() -> None:
+    """An `_Avoid_:` line shown as a code example is not a declaration."""
+    from disambiguate.parser import extract_avoided_terms
+
+    text = (
+        "## Avoided-term\n\nDeclared on the term file's `_Avoid_:` line:\n\n"
+        "```markdown\n_Avoid_: gadget, doohickey\n```\n"
+    )
+    assert extract_avoided_terms(text) == []

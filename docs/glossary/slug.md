@@ -16,3 +16,5 @@ Slugs must be unique within a glossary. The canonical format is
 `^[a-z0-9]+(?:-[a-z0-9]+)*$`: lowercase ASCII letters, digits, and single
 hyphens between segments — no leading or trailing hyphen, no consecutive
 hyphens. Disambiguate's lint enforces this format.
+
+_Avoid_: term id, term-id, term name
