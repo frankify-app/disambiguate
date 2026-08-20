@@ -9,11 +9,19 @@
 #
 # Label, body and review events re-run only THIS workflow — the gate
 # re-judges without re-running the test matrix.
+#
+# Re-requesting a review re-runs the gate too (#168). That is the path
+# for a reviewer who RESOLVED threads rather than replying: resolution
+# emits no Actions event at all — `pull_request_review_thread` is an
+# App-only webhook — and a job re-run reuses the merge commit from the
+# original run, so it re-judges the old base with the old gate. A
+# fresh event is the only thing that recomputes the merge ref.
 name: CI gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited, labeled, unlabeled]
+    types: [opened, synchronize, reopened, edited, labeled, unlabeled,
+            review_requested, ready_for_review]
   pull_request_review:
     types: [submitted, edited, dismissed]
   pull_request_review_comment:

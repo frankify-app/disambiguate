@@ -6,7 +6,7 @@ Three subcommands, one per job in ci-ok.yml:
   ticket     the PR names its tickets in the canonical ALL-CAPS form
   reviews    every human review thread is answered with a verified
              commit URL or a line starting with the central file's
-             `no_commit_marker`
+             `no_commit_marker`, or resolved by the reviewer
   aggregate  every job of every pull_request-triggered workflow on
              this head SHA succeeded — the one required context
 
@@ -56,6 +56,31 @@ def fetch(path, token):
     )
     with urllib.request.urlopen(req) as response:  # noqa: S310 — checked above
         return json.load(response)
+
+
+def graphql(query, variables, token):
+    """POST one GraphQL query — the read for what REST does not expose.
+
+    Review-thread resolution exists only in the GraphQL schema, so this
+    is the file's second and last network door: a POST to the fixed
+    /graphql path, under the same scheme guard as `fetch`.
+    """
+    body = json.dumps({"query": query, "variables": variables}).encode()
+    req = urllib.request.Request(  # noqa: S310 — api_url rejects every other scheme
+        api_url("/graphql"),
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "Content-Type": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req) as response:  # noqa: S310 — checked above
+        payload = json.load(response)
+    if payload.get("errors"):
+        raise RuntimeError(f"GraphQL errors: {payload['errors']}")
+    return payload["data"]
 
 
 def paginate(path, token, key=None):
@@ -198,10 +223,37 @@ def warn_premature_close(body, config, repo, number, token):
             )
 
 
+def live_pr(payload, token):
+    """The PR as it is NOW, falling back to the event's snapshot.
+
+    The payload is frozen when the run is created, and a re-run replays
+    that same payload — so a body corrected after a red run stays
+    invisible to every re-run of it, and the gate fails forever for a
+    reason that no longer exists (#159). Only the number is taken from
+    the event; everything judged is read live.
+
+    A read that fails leaves the payload in place: the gate judges a
+    possibly-stale body rather than erroring, which is the same verdict
+    it gave before this existed, and never a pass it did not earn.
+    """
+    if not token:
+        return payload
+    try:
+        fresh = fetch(
+            f"/repos/{os.environ['GITHUB_REPOSITORY']}/pulls/{payload['number']}", token
+        )
+    except OSError as err:
+        print(
+            f"::notice::could not read the live pull request ({err}) — judging the event payload"
+        )
+        return payload
+    return fresh
+
+
 def run_ticket():
     with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
         event = json.load(handle)
-    pr = event["pull_request"]
+    pr = live_pr(event["pull_request"], os.environ.get("GH_TOKEN"))
     config = reference_config()
     problems, escaped = ticket_violations(
         pr.get("body"),
@@ -239,14 +291,24 @@ def thread_of(comments):
     return list(threads.values())
 
 
-def review_violations(threads, pr_author, pr_shas, base_url, marker):
-    """Human threads left without a qualifying author reply.
+def review_violations(
+    threads, pr_author, pr_shas, base_url, marker, resolved=frozenset()
+):
+    """The agent's worklist: human threads still needing a response.
 
-    Qualifying: a full commit URL under `base_url` whose sha is one of
+    Each violation names its exact thread — opener, path, a quote of
+    the comment and its URL — because the reader is the agent deciding
+    what to do next, not a human who already knows which comment they
+    left.
+
+    Answered: a full commit URL under `base_url` whose sha is one of
     this PR's own commits — a pasted-but-wrong link fails, and a bare
     hash fails by design — or a line starting exactly with the central
-    file's `no_commit_marker`. Resolving a thread is not answering it;
-    this never reads resolution.
+    file's `no_commit_marker`. A thread the reviewer RESOLVED is off
+    the worklist regardless: resolution is the reviewer's own sign-off
+    that nothing more is needed, and demanding a reply on top of it
+    gated pandoscope/skills#30 on wording nobody was waiting for
+    (agentic-engineering-template#166).
     """
     url_re = re.compile(
         re.escape(base_url) + r"/[\w.-]+/[\w.-]+/commit/([0-9a-f]{7,40})\b"
@@ -256,6 +318,8 @@ def review_violations(threads, pr_author, pr_shas, base_url, marker):
         first = comments[0]
         opener = first["user"]["login"]
         if opener == pr_author or opener.endswith("[bot]"):
+            continue
+        if first.get("id") in resolved:
             continue
         answered = False
         for reply in comments[1:]:
@@ -272,11 +336,66 @@ def review_violations(threads, pr_author, pr_shas, base_url, marker):
                 break
         if not answered:
             where = first.get("path") or "(general)"
+            quote = " ".join((first.get("body") or "").split())
+            if len(quote) > 90:
+                quote = quote[:87] + "..."
+            link = first.get("html_url") or ""
             problems.append(
-                f"review thread by {opener} at {where} has no reply from "
-                f"{pr_author} carrying a commit URL on this PR or a '{marker} <why>' line"
+                f'unanswered review thread by {opener} at {where}: "{quote}"'
+                + (f" ({link})" if link else "")
+                + f" — reply with a commit URL on this PR or a '{marker} <why>'"
+                " line, or the reviewer resolves the thread"
             )
     return problems
+
+
+RESOLVED_QUERY = """
+query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes { isResolved comments(first: 1) { nodes { databaseId } } }
+      }
+    }
+  }
+}
+"""
+
+
+def resolved_roots(nodes):
+    """Root-comment ids of resolved threads, from reviewThreads nodes.
+
+    The databaseId is the same id the REST comments endpoint returns,
+    which is what lets resolution — GraphQL-only — exempt threads built
+    from REST data.
+    """
+    roots = set()
+    for node in nodes:
+        if not node.get("isResolved"):
+            continue
+        for comment in (node.get("comments") or {}).get("nodes") or []:
+            if comment.get("databaseId") is not None:
+                roots.add(comment["databaseId"])
+    return roots
+
+
+def resolved_thread_roots(repo, number, token):
+    """Every resolved thread's root id, paged."""
+    owner, name = repo.split("/", 1)
+    nodes = []
+    cursor = None
+    while True:
+        data = graphql(
+            RESOLVED_QUERY,
+            {"owner": owner, "name": name, "number": number, "cursor": cursor},
+            token,
+        )
+        threads = data["repository"]["pullRequest"]["reviewThreads"]
+        nodes.extend(threads["nodes"])
+        if not threads["pageInfo"]["hasNextPage"]:
+            return resolved_roots(nodes)
+        cursor = threads["pageInfo"]["endCursor"]
 
 
 def reference_config():
@@ -302,7 +421,12 @@ def run_reviews():
     shas = [c["sha"] for c in paginate(f"/repos/{repo}/pulls/{number}/commits", token)]
     marker = reference_config()["no_commit_marker"]
     problems = review_violations(
-        thread_of(comments), pr["user"]["login"], shas, SERVER, marker
+        thread_of(comments),
+        pr["user"]["login"],
+        shas,
+        SERVER,
+        marker,
+        resolved=resolved_thread_roots(repo, number, token),
     )
     for problem in problems:
         print(f"::error::{problem}")

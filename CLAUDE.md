@@ -11,6 +11,23 @@ CLIs there — the environment actively sabotages them. The environment's
 tool declarations override any command examples elsewhere in this repo,
 including `AGENTS.md`.
 
+## Forge Budget
+
+API budget per-account, shared by all sessions.
+
+- No PR subscriptions unless the principal asks.
+- Git before REST. Clone answers: file contents, diffs, history,
+  branch state. API only for: check runs, job logs, comments,
+  reviews, labels, PR/issue state.
+- Fetch only needed fields and items; need everything → few large
+  pages. Already-fetched state is cached until an event invalidates
+  it.
+
+## Learnings
+
+New non-obvious findings — tools, environment, failure modes — go in
+this file, tersely.
+
 ## Pull Requests
 
 Share PR URL in response to user. After push, watch CI via native tooling
