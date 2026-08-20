@@ -17,10 +17,7 @@ Aliases match exactly, on word boundaries. No inflection is inferred, so a
 plural is a separate alias: declaring `backlink` does not catch
 `backlinks`. Declare each form the prose might use. Aliases may be several
 words (`dependency order`), and matching skips code spans, fences, and
-existing links like every other drift-check. <!-- d10e: ignore[unlinked-term] drift-check -->
-<!-- The mention above stays plain deliberately: drift-check.md already
-     links this term, and linking back would make the dependency graph
-     cyclic, which the resolver rejects. -->
+existing links like every other check for drifts.
 
 An `_Avoid_:` line inside a code fence or span is an example, not a
 declaration — a document may show the grammar without adopting it.

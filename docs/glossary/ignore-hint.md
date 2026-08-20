@@ -22,3 +22,18 @@ A suppression that matches no finding is itself reported as a fatal
 detection is shadowing-aware: an inline hint that matches nothing but sits
 under a file-level or config suppression of the same rule-code is not
 reported stale.
+
+Suppression is the last resort, used only when the finding cannot be
+avoided. Rewording the sentence so the [term](term.md) is not mentioned,
+or linking the mention, is always preferred: an ignore-hint carries a
+maintenance cost forever, while a reworded sentence costs once.
+
+The one justification that demands extra scrutiny is "linking would make
+the [dependency](dependency.md) graph cyclic". An agent reviewing a
+[glossary](glossary.md) must check that claim critically rather than accept it: the
+suppression silences exactly the mention through which the [resolver](resolver.md) would
+have surfaced the cycle, so an ignore-hint resting on it can hide a
+dependency structure that could genuinely be fixed — by rewording the
+mention away, or by restructuring which term defines and which term
+references. Only a cycle that survives that check justifies the hint, and
+the hint's comment must then say so.
