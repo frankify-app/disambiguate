@@ -1,0 +1,37 @@
+name: Notify sessions manifest
+
+# The event side of meta's regenerate-repos-manifest workflow: the
+# moment this repo's session marker changes on the default branch,
+# tell meta to regenerate environment/repos.manifest — no cron, no
+# waiting. meta re-enumerates the whole org on every dispatch, so this
+# event also prunes entries for repos that vanished since the last run.
+on:
+  push:
+    branches: [main]
+    paths: [".pandoscope-sessions"]
+
+permissions: {}
+
+jobs:
+  dispatch:
+    name: "dispatch sessions-marker-changed to meta"
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    steps:
+      - name: Mint release-bot installation token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2.2.2
+        with:
+          app-id: ${{ vars.RELEASE_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+
+      - name: Tell meta the marker changed
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$OWNER/meta/dispatches" \
+            -f event_type=sessions-marker-changed \
+            -f "client_payload[repo]=$REPO"
