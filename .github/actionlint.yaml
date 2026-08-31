@@ -1,0 +1,8 @@
+# Blacksmith runners register as self-hosted, so actionlint does not know
+# the label from its built-in GitHub-hosted list and would flag every
+# `runs-on:` as unknown. Declaring it here teaches the linter the label
+# this repo's workflows target (agentic_actions_runner in the copier
+# answers). Update this list if the runner label changes.
+self-hosted-runner:
+  labels:
+    - blacksmith-2vcpu-ubuntu-2204
