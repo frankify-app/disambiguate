@@ -15,7 +15,8 @@ including `AGENTS.md`.
 
 API budget per-account, shared by all sessions.
 
-- No PR subscriptions unless the principal asks.
+- No PR subscriptions and no scheduled self check-ins unless the
+  principal asks; report state when asked and stop.
 - Git before REST. Clone answers: file contents, diffs, history,
   branch state. API only for: check runs, job logs, comments,
   reviews, labels, PR/issue state.

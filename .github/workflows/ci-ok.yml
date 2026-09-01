@@ -77,6 +77,57 @@ jobs:
           REFERENCE_KEYWORDS: .github/reference-keywords.json
         run: python3 scripts/ci/check_gate.py reviews
 
+  leaks:
+    name: "leaks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          # gitleaks walks the PR's own commits, not just the merge ref.
+          fetch-depth: 0
+
+      # Credential class (#189): the pinned gitleaks binary scans every
+      # PR commit's content. Pinned by version AND checksum — a moving
+      # release tag could swap the scanner under every repo's CI at
+      # once. --redact keeps whatever it finds out of this public log.
+      - name: gitleaks finds no credential in any PR commit
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          curl -sSfL -o gitleaks.tgz "https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz"
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+          ./gitleaks git --redact --no-banner --exit-code 1 \
+            --log-opts "$BASE_SHA..$HEAD_SHA"
+
+      # Identity class (#189): known strings, matched verbatim against
+      # every surface this PR publishes. The org secret carries values
+      # only — the repo commits nothing but this variable's name.
+      - name: No blocklisted string on any surface this PR publishes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUSH_BLOCKLIST: ${{ secrets.PUSH_BLOCKLIST }}
+        run: python3 scripts/ci/check_gate.py leaks
+
+  approval:
+    name: "merge approval"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      # An allowlisted human's latest review must APPROVE the current
+      # head commit (stale approvals name the commit gap), or the PR is
+      # authored by an approver — authorship is approval by the same
+      # party, since GitHub forbids approving one's own PR. The
+      # `automated`-label + bot-author escape matches the ticket gate,
+      # so release and template-update PRs do not wait on a click (#187).
+      - name: A current human approval covers this head
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_APPROVERS: .github/merge-approvers.json
+        run: python3 scripts/ci/check_gate.py approval
+
   ci-ok:
     name: "ci-ok"
     runs-on: ubuntu-latest

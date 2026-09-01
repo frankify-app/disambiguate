@@ -1,0 +1,4 @@
+{
+  "comment": "Humans whose Approve review satisfies the merge-approval gate (agentic-engineering-template#187). A PR AUTHORED by one of them passes without a review — an author cannot approve their own PR, and authorship is approval by the same party. Bots never belong here.",
+  "approvers": ["pando-genet"]
+}

@@ -1,0 +1,46 @@
+# The stale-red janitor for the CI gate (agentic-engineering-template#190).
+#
+# A re-judge event spawns a FRESH `CI gate` run; the prior red run's
+# check runs stay `failure` on the same head SHA, and required-check
+# evaluation counts that stale red over the newer green — a PR whose
+# gate is genuinely green stays unmergeable until the old run is re-run
+# IN PLACE. This workflow does exactly that, and nothing else: it waits
+# until no gate run on the head is in flight, then re-runs each
+# completed non-green gate run's failed jobs, once each.
+#
+# It never fabricates green — a rerun re-executes the gate's own jobs,
+# which judge live data, so a still-unmet condition reruns red and
+# keeps blocking. It is deliberately NOT part of ci-ok.yml: a rerun
+# queued into the `ci-ok-<pr>` concurrency group would cancel the
+# in-flight fresh run via cancel-in-progress, so this rides its own
+# group. No `synchronize` trigger, so the aggregate never awaits it.
+name: Gate rerun
+
+on:
+  pull_request:
+    types: [edited, labeled, unlabeled, review_requested, ready_for_review]
+  pull_request_review:
+    types: [submitted, edited, dismissed]
+  pull_request_review_comment:
+    types: [created, edited, deleted]
+
+permissions:
+  actions: write
+
+concurrency:
+  group: gate-rerun-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  rerun:
+    name: "rerun stale gate runs"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Stale non-green gate runs on this head are re-run in place
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          GATE_WORKFLOW: .github/workflows/ci-ok.yml
+        run: python3 scripts/ci/check_gate.py rerun
