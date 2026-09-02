@@ -282,7 +282,22 @@ jobs:
             echo "## Template changelog ($NEW_REF)"
             echo
             echo "$changelog"
-          } > /tmp/pr-body.md
+          } > /tmp/pr-release.md
+
+          # Compose the body. A joined PR keeps its own text — a
+          # hand-opened update PR carries the canonical ticket
+          # reference the gate reads, and rewriting it turned a green
+          # PR red (#218). Only the release section this workflow
+          # wrote before is replaced.
+          if [ -n "$EXISTING_PR" ]; then
+            gh pr view "$EXISTING_PR" --json body --jq .body \
+              > /tmp/pr-existing.md || : > /tmp/pr-existing.md
+            bash scripts/ci/template-update-body.sh \
+              /tmp/pr-release.md /tmp/pr-existing.md > /tmp/pr-body.md
+          else
+            bash scripts/ci/template-update-body.sh \
+              /tmp/pr-release.md > /tmp/pr-body.md
+          fi
 
           # The ticket gate's designed escape (#137): a bot-authored PR
           # carrying the `automated` label needs no ticket reference — a
@@ -294,9 +309,10 @@ jobs:
             --description "Bot-authored maintenance PR; the ticket gate's designed escape" \
             || true
 
-          # A joined PR is refreshed in place — title, body and label
-          # brought to the new release — so one PR carries the update
-          # conversation however many releases pass through it.
+          # A joined PR is refreshed in place — title, release notes
+          # and label brought to the new release — so one PR carries
+          # the update conversation however many releases pass through
+          # it, without losing the body it was opened with.
           if [ -n "$EXISTING_PR" ]; then
             gh pr edit "$EXISTING_PR" \
               --title "chore: update agentic template to $NEW_REF" \
