@@ -152,10 +152,20 @@ Code-specific skills:
 
 ## Git
 
-- Branch: `<agent>/<issue-number>-<desc>` (e.g. `hermes/42-fix-auth`, `claude/42-fix-auth`)
+- Branch: `<agent>/<code><ticket>[-<code><ticket>…]-<desc>` (e.g. `claude/42-fix-auth`, `claude/sk162-session-probe`) — the lowercase repo shortcode is optional per token and expresses a cross-repo arc (same branch name in every repo the arc touches); every token's ticket number must be referenced in the PR body
 - Never push to `main`
 - Create PR immediately on branch creation
 - Commits: conventional commits
+- **Merge commits only on `main`** — feature branches rebase onto
+  `main`, never merge it in; the `commitlint` job rejects `Merge`
+  headers on PR commits.
+- **A fix to this branch's own commits is a `fixup!`**
+  (`git commit --fixup <sha>`), never a standalone `fix:`/`refactor:`
+  commit — fold before merge with
+  `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash`. The commitlint
+  gate stays red while a `fixup!` exists: that is the fold reminder,
+  not a failure to route around. Standalone `fix:` commits are for
+  defects that already exist on `main`.
 - **Ticket references in PR bodies are ALL CAPS, from the central list**
   (`.github/reference-keywords.json`, enforced by the `ticket` job):
   `CLOSES #n` / `FIXES #n` close on merge,
@@ -164,13 +174,13 @@ Code-specific skills:
   (close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved) in any other casing fails
   the gate — the forge would act on it whether or not the gate
   recognized the reference. Every ticket number in a
-  `claude/(\d+(?:-\d+)*)-` branch must appear as a canonical
+  `claude/((?:[a-z][a-z0-9]*?)?\d+(?:-(?:[a-z][a-z0-9]*?)?\d+)*)-` branch must appear as a canonical
   reference in the body.
-- **Answer every review comment with a full commit URL or `No commit: <why>`**
-  (enforced by the `review-answers` job): the commit URL must be a real
-  commit on the PR — verify with `git rev-parse` before pasting, never
-  expand a short hash from memory — and resolving a thread is not
-  answering it.
+- **Answer every review comment by naming the fixing commit or `No commit: <why>`**
+  (enforced by the `review-answers` job): the commit — as a URL or a
+  sha of seven or more hex digits — must be a real commit on the PR;
+  verify with `git rev-parse` before pasting, never expand a short hash
+  from memory, and resolving a thread is not answering it.
 - Document unexpected encounters and design decisions in commit message as well as PR/Issue
 - **A push rejected over a commit you did not write is rebased around, never forced.**
   Branch rules re-evaluate every commit an update spans, not just the new ones,

@@ -1,0 +1,110 @@
+name: TruffleHog audit
+
+# Layer 3 of the leak-prevention stack
+# (agentic-engineering-template#189): a daily retroactive scan of THIS
+# repo's surfaces no hook can gate — issue and PR descriptions and
+# comments, plus full git history — with TruffleHog's stock credential
+# rules AND the PUSH_BLOCKLIST identity denylist as custom detectors.
+# One job per repo, responsible only for the repo it lives on: the
+# scan runs on the repo's own token (no org enumeration, no app
+# credential) and is free on public repos. A finding turns the run
+# red — the red run is the alert. Layers 1–2 gate what agents push;
+# this net catches what publishes without a gate (a comment posted by
+# hand, content that predates the gates, a denylist entry added after
+# the fact).
+on:
+  schedule:
+    - cron: "26 5 * * *"
+  workflow_dispatch:
+    inputs:
+      scan_private:
+        description: >-
+          Scan even though this repo is private — the
+          scan-before-going-public check.
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: trufflehog-audit
+
+jobs:
+  audit:
+    name: "trufflehog self-scan"
+    runs-on: ubuntu-latest
+    steps:
+      # Private repos are not exposed, so their daily run stops here
+      # for free instead of billing a scan nobody needs. The dispatch
+      # input overrides for the moment before a repo goes public.
+      - name: Skip private repos unless explicitly overridden
+        id: visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OVERRIDE: ${{ inputs.scan_private }}
+        run: |
+          set -euo pipefail
+          private="$(gh api "repos/$GITHUB_REPOSITORY" --jq .private)"
+          if [ "$private" = "true" ] && [ "$OVERRIDE" != "true" ]; then
+            echo "::notice::private repo — not exposed, audit skipped (dispatch with scan_private to override)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        if: steps.visibility.outputs.skip == 'false'
+
+      # Pinned by version AND sha256 (the ci-ok gitleaks convention):
+      # a moving release tag must not swap the scanner under the audit.
+      - name: Install trufflehog 3.97.1 (pinned by sha256)
+        if: steps.visibility.outputs.skip == 'false'
+        run: |
+          set -euo pipefail
+          curl -sSfL -o trufflehog.tar.gz \
+            https://github.com/trufflesecurity/trufflehog/releases/download/v3.97.1/trufflehog_3.97.1_linux_amd64.tar.gz
+          echo "f863ea3a8d786f7d097870496c977944cce7372a2fe1e56707d965016e543ece  trufflehog.tar.gz" | sha256sum -c
+          tar -xzf trufflehog.tar.gz trufflehog
+
+      # The denylist values live only in the org secret and the config
+      # file generated here; the generator's own output is value-silent
+      # and GitHub additionally masks the secret in logs. An empty
+      # blocklist is loud but not fatal: stock rules still scan.
+      - name: Generate denylist detectors from PUSH_BLOCKLIST
+        if: steps.visibility.outputs.skip == 'false'
+        env:
+          PUSH_BLOCKLIST: ${{ secrets.PUSH_BLOCKLIST }}
+        run: |
+          set -euo pipefail
+          scripts/ci/trufflehog-detectors.sh "$RUNNER_TEMP/detectors.yaml"
+          if [ ! -e "$RUNNER_TEMP/detectors.yaml" ]; then
+            echo "::warning::PUSH_BLOCKLIST is empty — the scan runs with stock credential rules only (identity layer off)."
+            printf 'detectors: []\n' > "$RUNNER_TEMP/detectors.yaml"
+          fi
+
+      # --json so findings can be reduced to value-silent lines: the
+      # raw stream carries the matched secret (Raw/RawV2), so it is
+      # never printed — only detector label and location.
+      - name: Scan this repo — git history, issues, PRs, comments
+        if: steps.visibility.outputs.skip == 'false'
+        env:
+          GH_AUDIT_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          ./trufflehog github "--repo=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" \
+            --issue-comments --pr-comments \
+            --config "$RUNNER_TEMP/detectors.yaml" \
+            --token "$GH_AUDIT_TOKEN" \
+            --json --no-update --fail --log-level=-1 \
+            > "$RUNNER_TEMP/findings.jsonl" && rc=0 || rc=$?
+          # trufflehog --fail exits 183 on findings (the reporter turns
+          # those red itself); any other nonzero exit is a scan failure
+          # and must not pass silently.
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 183 ]; then
+            echo "::error::trufflehog exited $rc (scan failure, not findings)"
+            exit "$rc"
+          fi
+          scripts/ci/trufflehog-report.sh "$RUNNER_TEMP/findings.jsonl"

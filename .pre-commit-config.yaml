@@ -43,6 +43,11 @@ repos:
     hooks:
       - id: yamllint
         args: [--strict]
+  # Credential class (#189): stock rules over the staged diff, offline.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.7
     hooks:
@@ -90,6 +95,37 @@ repos:
       # Roots come from the agentic_disambiguate_roots answer: prek has no
       # repo-owned env file to feed DISAMBIGUATE_ROOTS through, so answer
       # data is the only place roots survive `copier update` unpatched.
+      # Identity class (#189): PUSH_BLOCKLIST is `|`-separated values
+      # in env, never committed — exactly grep's alternation syntax.
+      # An entry may name its placeholder (`value=pb:name`); labels
+      # are metadata and are stripped before the pattern is built.
+      # `-l` prints only the offending FILE, never the matched line;
+      # unset env means the layer is off and the hook passes. The
+      # pattern is normalized first (CR/LF and stray pipes stripped):
+      # an editor-saved trailing newline would otherwise put an empty
+      # alternative into the pattern, matching every file.
+      - id: push-blocklist
+        name: no blocklisted string in staged files
+        entry: bash -c 'p=$(printf %s "${PUSH_BLOCKLIST:-}" | tr -d "\r\n" | sed "s/=[^|]*//g;s/||*/|/g;s/^|//;s/|$//"); [ -z "$p" ] || ! grep -IilE -- "$p" "$@"' --
+        language: system
+      # The same gate at the commit-msg stage: messages auto-publish
+      # on push with no approval step, and the pre-commit stage fires
+      # before a message exists. Git hands this hook the message file.
+      - id: push-blocklist-msg
+        name: no blocklisted string in the commit message
+        entry: bash -c 'p=$(printf %s "${PUSH_BLOCKLIST:-}" | tr -d "\r\n" | sed "s/=[^|]*//g;s/||*/|/g;s/^|//;s/|$//"); [ -z "$p" ] || ! grep -IilE -- "$p" "$@"' --
+        language: system
+        stages: [commit-msg]
+      # Branch discipline (skills#147): a claude/* branch must match
+      # the vendored branch_pattern — shortcode-qualified ticket
+      # tokens, then the slug — or the ticket gate's branch half
+      # silently never fires on it.
+      - id: branch-name
+        name: branch name matches the ticket gate's branch_pattern
+        entry: scripts/check-branch-name.sh
+        language: script
+        pass_filenames: false
+        always_run: true
       - id: disambiguate-lint
         name: disambiguate --lint
         entry: uvx disambiguate==0.3.0 --lint

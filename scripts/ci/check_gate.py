@@ -1,14 +1,26 @@
 #!/usr/bin/env python3
 """The uniform CI gate (agentic-engineering-template#137, #143).
 
-Three subcommands, one per job in ci-ok.yml:
+One subcommand per job in ci-ok.yml:
 
   ticket     the PR names its tickets in the canonical ALL-CAPS form
   reviews    every human review thread is answered with a verified
              commit URL or a line starting with the central file's
              `no_commit_marker`, or resolved by the reviewer
+  approval   an allowlisted human's latest review APPROVES the current
+             head commit — or the PR is authored by one (#187)
   aggregate  every job of every pull_request-triggered workflow on
              this head SHA succeeded — the one required context
+  rerun      stale non-green gate runs on this head SHA are re-run in
+             place, so a superseded red stops blocking merge (#190) —
+             gate-rerun.yml's job, not ci-ok.yml's
+  leaks      no PUSH_BLOCKLIST value appears on any surface this PR
+  payload    no PUSH_BLOCKLIST value in the one item an issue or
+             comment event just published (#208; not a gate)
+             publishes: title, body, commit messages, commit author
+             and committer names/emails, the branch name, the diff,
+             the PR's own comment and review threads, and the bodies
+             and comments of every ticket the body references (#189)
 
 Decision logic lives in pure functions over plain data so the tests
 exercise it without a network; `fetch` is the only door to the API.
@@ -20,6 +32,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 
 import yaml
@@ -62,8 +75,8 @@ def graphql(query, variables, token):
     """POST one GraphQL query — the read for what REST does not expose.
 
     Review-thread resolution exists only in the GraphQL schema, so this
-    is the file's second and last network door: a POST to the fixed
-    /graphql path, under the same scheme guard as `fetch`.
+    is the file's second network door: a POST to the fixed /graphql
+    path, under the same scheme guard as `fetch`.
     """
     body = json.dumps({"query": query, "variables": variables}).encode()
     req = urllib.request.Request(  # noqa: S310 — api_url rejects every other scheme
@@ -81,6 +94,28 @@ def graphql(query, variables, token):
     if payload.get("errors"):
         raise RuntimeError(f"GraphQL errors: {payload['errors']}")
     return payload["data"]
+
+
+def post(path, token):
+    """POST one empty-bodied API path — the file's one write door.
+
+    Exists solely for `rerun-failed-jobs` (#190): superseding a stale
+    red check run takes a write, where everything the gate JUDGES stays
+    behind the two read doors above. Same scheme guard; returns the
+    HTTP status, since the endpoint answers 201 with no body.
+    """
+    req = urllib.request.Request(  # noqa: S310 — api_url rejects every other scheme
+        api_url(path),
+        data=b"",
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urllib.request.urlopen(req) as response:  # noqa: S310 — checked above
+        return response.status
 
 
 def paginate(path, token, key=None):
@@ -143,7 +178,14 @@ def ticket_violations(body, branch, labels, author, config):
     named = re.match(config["branch_pattern"], branch or "")
     if named:
         in_body = {re.search(r"#(\d+)$", ref).group(1) for _, ref in found}
-        for number in sorted(set(named.group(1).split("-")) - in_body, key=int):
+        # A token may carry a lowercase repo shortcode before its
+        # number (skills#147: one branch name for a cross-repo arc);
+        # the ticket number is the token's trailing digit run, so
+        # d10e76 names ticket 76, never 10.
+        in_branch = {
+            re.search(r"(\d+)$", token).group(1) for token in named.group(1).split("-")
+        }
+        for number in sorted(in_branch - in_body, key=int):
             problems.append(
                 f"the branch names ticket {number} but the body never "
                 f"references #{number} with a canonical keyword"
@@ -301,18 +343,22 @@ def review_violations(
     what to do next, not a human who already knows which comment they
     left.
 
-    Answered: a full commit URL under `base_url` whose sha is one of
-    this PR's own commits — a pasted-but-wrong link fails, and a bare
-    hash fails by design — or a line starting exactly with the central
-    file's `no_commit_marker`. A thread the reviewer RESOLVED is off
+    Answered: the reply names a commit that is one of this PR's own —
+    as a commit URL under `base_url`, the PR's own /commits/<sha> URL,
+    or a bare sha of seven or more hex digits; the gate already holds
+    the PR's shas, so any spelling it can match is proof enough and
+    demanding one spelling only cost a round-trip (#205). A sha not on
+    the PR fails whatever wraps it. Or a line starting exactly with the
+    central file's `no_commit_marker`. A thread the reviewer RESOLVED is off
     the worklist regardless: resolution is the reviewer's own sign-off
     that nothing more is needed, and demanding a reply on top of it
     gated pandoscope/skills#30 on wording nobody was waiting for
     (agentic-engineering-template#166).
     """
-    url_re = re.compile(
-        re.escape(base_url) + r"/[\w.-]+/[\w.-]+/commit/([0-9a-f]{7,40})\b"
-    )
+    # Any hex run of 7-40 digits is a candidate; only a prefix of one of
+    # the PR's own shas answers, so hex-looking prose cannot pass by
+    # accident and a pasted-but-wrong sha still fails.
+    sha_re = re.compile(r"\b([0-9a-f]{7,40})\b")
     problems = []
     for comments in threads:
         first = comments[0]
@@ -328,7 +374,7 @@ def review_violations(
             body = reply.get("body") or ""
             linked = any(
                 any(sha.startswith(match.group(1)) for sha in pr_shas)
-                for match in url_re.finditer(body)
+                for match in sha_re.finditer(body)
             )
             marked = any(line.strip().startswith(marker) for line in body.splitlines())
             if linked or marked:
@@ -343,8 +389,10 @@ def review_violations(
             problems.append(
                 f'unanswered review thread by {opener} at {where}: "{quote}"'
                 + (f" ({link})" if link else "")
-                + f" — reply with a commit URL on this PR or a '{marker} <why>'"
-                " line, or the reviewer resolves the thread"
+                + " — reply naming a commit on this PR (its URL or sha; a sha"
+                " not on the PR fails, and amending the commit invalidates"
+                f" the reference), or a '{marker} <why>' line, or the reviewer"
+                " resolves the thread"
             )
     return problems
 
@@ -432,6 +480,119 @@ def run_reviews():
         print(f"::error::{problem}")
     if not problems:
         print("Every human review thread is answered.")
+    return 1 if problems else 0
+
+
+# ----------------------------------------------------------- approval
+
+
+def latest_reviews(reviews):
+    """Each reviewer's latest state-bearing review, in submission order.
+
+    COMMENTED reviews carry no verdict and are skipped; everything else
+    (APPROVED, CHANGES_REQUESTED, DISMISSED) overwrites the reviewer's
+    earlier entry — GitHub returns reviews chronologically, so the last
+    one standing is the reviewer's current word.
+    """
+    current = {}
+    for review in reviews:
+        if review.get("state") == "COMMENTED":
+            continue
+        user = (review.get("user") or {}).get("login")
+        if user:
+            current[user] = review
+    return current
+
+
+def approval_violations(reviews, approvers, author, labels, head_sha):
+    """Why the PR lacks a current human approval, and whether the
+    escape held.
+
+    The pass conditions, in order:
+    - `automated` label on a bot-authored PR — the same escape as the
+      ticket gate, so release and template-update PRs do not wait on a
+      human click (#187 records this as a deliberate hole).
+    - the PR's AUTHOR is an allowlisted approver — an author cannot
+      approve their own PR, and authorship is approval by the same
+      party.
+    - some approver's latest review is APPROVED on the current head
+      commit. An approval on an older commit is stale and named as
+      such: whatever was approved is not what would merge.
+
+    A CHANGES_REQUESTED from an approver is named explicitly — it is
+    not merely "no approval", it is a standing objection.
+    """
+    if "automated" in labels and str(author).endswith("[bot]"):
+        return [], True
+    if author in approvers:
+        return [], False
+
+    problems = []
+    stale = []
+    for user, review in latest_reviews(reviews).items():
+        if user not in approvers:
+            continue
+        state = review.get("state")
+        if state == "APPROVED":
+            if review.get("commit_id") == head_sha:
+                return [], False
+            stale.append(
+                f"approval by {user} is stale — it approved "
+                f"{str(review.get('commit_id'))[:7]}, the head is now "
+                f"{str(head_sha)[:7]}; re-approve the current state"
+            )
+        elif state == "CHANGES_REQUESTED":
+            problems.append(
+                f"{user} requested changes — address them or have the review dismissed"
+            )
+    problems.extend(stale)
+    if not problems:
+        problems.append(
+            "no approving review from an allowlisted human "
+            f"({'/'.join(sorted(approvers)) or 'none configured'}) — "
+            "an approver clicks Approve, or authors the PR"
+        )
+    return problems, False
+
+
+def approvers_config():
+    """The central approvers file — required, never defaulted (#144).
+
+    An empty list is as loud as a missing file: a gate that waved
+    through every PR because nobody was listed would read absence as
+    approval.
+    """
+    with open(os.environ["MERGE_APPROVERS"], encoding="utf-8") as handle:
+        approvers = json.load(handle)["approvers"]
+    if not approvers or not all(isinstance(a, str) and a for a in approvers):
+        raise ValueError(
+            f"{os.environ['MERGE_APPROVERS']} lists no approvers — "
+            "name at least one human login"
+        )
+    return approvers
+
+
+def run_approval():
+    token = os.environ["GH_TOKEN"]
+    repo = os.environ["GITHUB_REPOSITORY"]
+    with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
+        event = json.load(handle)
+    pr = live_pr(event["pull_request"], token)
+    reviews = paginate(f"/repos/{repo}/pulls/{pr['number']}/reviews", token)
+    problems, escaped = approval_violations(
+        reviews,
+        approvers_config(),
+        pr["user"]["login"],
+        [label["name"] for label in pr.get("labels", [])],
+        pr["head"]["sha"],
+    )
+    if escaped:
+        print("automated escape: bot-authored PR carries the automated label.")
+        return 0
+    for problem in problems:
+        print(f"::error::{problem}")
+    if not problems:
+        print("A current human approval covers this head.")
     return 1 if problems else 0
 
 
@@ -579,9 +740,296 @@ def run_aggregate():
         time.sleep(15)
 
 
+# -------------------------------------------------------------- rerun
+
+
+def stale_gate_runs(runs, gate_path):
+    """Completed non-green runs of the gate workflow, oldest first.
+
+    A re-judge event spawns a FRESH gate run; the prior red run's check
+    runs stay `failure` on the same head SHA, and required-check
+    evaluation counts that stale red over the newer green (#190 —
+    observed blocking #188's merge). Only re-running the old run in
+    place supersedes its verdict. `skipped` already passes evaluation,
+    so it is not stale; anything else non-success is.
+    """
+    return [
+        run
+        for run in sorted(runs, key=lambda run: run["id"])
+        if run["path"] == gate_path
+        and run["status"] == "completed"
+        and run["conclusion"] not in ("success", "skipped")
+    ]
+
+
+def gate_busy(runs, gate_path):
+    """Is any run of the gate workflow still queued or in flight?
+
+    Re-running an old run while a fresh one is in progress queues into
+    the same `ci-ok-<pr>` concurrency group and cancel-in-progress
+    kills the fresh run — trading one stale red for another. The rerun
+    therefore waits for quiet first, which is also why it lives in its
+    own workflow with its own group.
+    """
+    return any(
+        run["path"] == gate_path and run["status"] != "completed" for run in runs
+    )
+
+
+def run_rerun():
+    """Re-run each stale red gate run once, serially, then stop.
+
+    This job SYNCS old runs with the gate's current verdict; it never
+    judges. A rerun re-executes the gate's own jobs, which read live
+    data (#159), so a red flips green only when the condition genuinely
+    holds now — a still-unmet condition reruns red and keeps blocking,
+    which is correct and not this job's failure. Hence exit 0 on every
+    orderly path; each run is attempted at most once so a legitimately
+    red gate cannot loop.
+    """
+    token = os.environ["GH_TOKEN"]
+    repo = os.environ["GITHUB_REPOSITORY"]
+    sha = os.environ["HEAD_SHA"]
+    gate_path = os.environ["GATE_WORKFLOW"]
+    deadline = time.monotonic() + int(os.environ.get("GATE_RERUN_TIMEOUT", "1500"))
+
+    attempted = set()
+    while True:
+        runs = paginate(
+            f"/repos/{repo}/actions/runs?head_sha={sha}", token, "workflow_runs"
+        )
+        if not gate_busy(runs, gate_path):
+            stale = [
+                run
+                for run in stale_gate_runs(runs, gate_path)
+                if run["id"] not in attempted
+            ]
+            if not stale:
+                done = f"re-ran {sorted(attempted)}" if attempted else "none found"
+                print(f"No stale non-green gate runs left on {sha} ({done}).")
+                return 0
+            run = stale[0]
+            attempted.add(run["id"])
+            print(f"re-running failed jobs of run {run['id']} ({run['conclusion']})")
+            try:
+                post(f"/repos/{repo}/actions/runs/{run['id']}/rerun-failed-jobs", token)
+            except urllib.error.HTTPError as err:
+                # E.g. a cancelled run with nothing rerunnable (409) —
+                # note it and move on; syncing must not go red itself.
+                print(f"::warning::rerun of {run['id']} refused: {err}")
+        if time.monotonic() > deadline:
+            print("::warning::gate runs still in flight at the rerun timeout.")
+            return 0
+        time.sleep(15)
+
+
+# -------------------------------------------------------------- leaks
+
+
+def parse_blocklist(value):
+    """PUSH_BLOCKLIST env → (value, name) pairs, blanks dropped.
+
+    `|`-separated values (pandoscope/skills#46); the variable carries
+    WHAT to block and nothing else, so the committed side of the
+    contract is just this parser and the variable's name. An entry may
+    name its own placeholder (`value=pb:name`, `=` and `|` reserved):
+    the name is what violations and scrub placeholders say, and it
+    survives list edits where a positional index would drift. An
+    unlabeled entry falls back to its raw field position.
+    """
+    if not value:
+        return []
+    pairs = []
+    for position, entry in enumerate(value.split("|"), start=1):
+        term, _, name = entry.partition("=")
+        term = term.strip()
+        if term:
+            pairs.append((term, name.strip() or f"entry {position}"))
+    return pairs
+
+
+def leak_violations(surfaces, values):
+    """Denylist hits over (label, text) surfaces — value-silent.
+
+    Case-insensitive substring match, one violation per (surface,
+    entry) pair; `values` is parse_blocklist output. The violation
+    names WHERE and WHICH entry — by the entry's own placeholder name
+    when it carries one — never WHAT: the values are the identifying
+    material this gate keeps off public surfaces, and this gate's own
+    log on a public repo is such a surface (#189).
+    """
+    problems = []
+    for label, text in surfaces:
+        lowered = (text or "").lower()
+        for term, name in values:
+            if term.lower() in lowered:
+                problems.append(
+                    f"{label} carries PUSH_BLOCKLIST {name} — "
+                    "scrub it and rewrite the offending commit or text"
+                )
+    return problems
+
+
+def referenced_tickets(body, repo):
+    """Every ticket the body mentions, keyword or not, as owner/repo#n.
+
+    Broader than closing_refs on purpose: a see-also reference leaks
+    exactly like a CLOSES, so any `#n` / `owner/repo#n` occurrence
+    puts that ticket's surfaces under the scan.
+    """
+    refs = set()
+    for match in re.finditer(REF, body or ""):
+        ref = match.group(0)
+        refs.add(ref if "/" in ref else f"{repo}{ref}")
+    return sorted(refs)
+
+
+def pr_surfaces(
+    pr, commits, files, comments=(), reviews=(), review_comments=(), tickets=()
+):
+    """Every text surface this PR publishes, labeled for the verdict.
+
+    Commit metadata is listed explicitly because no established
+    scanner covers author/committer name and email (#189) — an agent's
+    misconfigured git identity auto-publishes on merge with no
+    approval step in between. The PR's own comment threads and the
+    tickets it references (`tickets` is (ref, body, comments) tuples)
+    are scanned too: those publish the instant they are posted, so
+    this cannot prevent — but the gate re-runs on PR events, and a hit
+    blocks merge and goes loud instead of lingering quietly.
+    """
+    surfaces = [("PR title", pr.get("title")), ("PR body", pr.get("body"))]
+    if pr.get("head"):
+        surfaces.append(("branch name", pr["head"].get("ref")))
+    for ref, body, ticket_comments in tickets:
+        surfaces.append((f"ticket {ref} body", body))
+        for comment in ticket_comments:
+            surfaces.append(
+                (f"ticket {ref} comment {comment['id']}", comment.get("body"))
+            )
+    for entry in commits:
+        sha = entry["sha"][:7]
+        commit = entry["commit"]
+        surfaces.append((f"commit {sha} message", commit.get("message")))
+        for role in ("author", "committer"):
+            who = commit.get(role) or {}
+            surfaces.append((f"commit {sha} {role} name", who.get("name")))
+            surfaces.append((f"commit {sha} {role} email", who.get("email")))
+    for changed in files:
+        surfaces.append((f"diff of {changed['filename']}", changed.get("patch")))
+    for comment in comments:
+        surfaces.append((f"comment {comment['id']}", comment.get("body")))
+    for review in reviews:
+        surfaces.append((f"review {review['id']}", review.get("body")))
+    for comment in review_comments:
+        where = comment.get("path") or "(general)"
+        surfaces.append(
+            (f"review comment {comment['id']} on {where}", comment.get("body"))
+        )
+    return surfaces
+
+
+def run_leaks():
+    token = os.environ["GH_TOKEN"]
+    repo = os.environ["GITHUB_REPOSITORY"]
+    values = parse_blocklist(os.environ.get("PUSH_BLOCKLIST"))
+    if not values:
+        # An unset org secret must not fail every fork and fresh
+        # consumer, but silence would hide that the layer is off.
+        print("::warning::PUSH_BLOCKLIST is empty — the denylist layer is inactive")
+        return 0
+    with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
+        event = json.load(handle)
+    pr = live_pr(event["pull_request"], token)
+    number = pr["number"]
+    commits = paginate(f"/repos/{repo}/pulls/{number}/commits", token)
+    files = paginate(f"/repos/{repo}/pulls/{number}/files", token)
+    tickets = []
+    for ref in referenced_tickets(pr.get("body"), repo):
+        ticket_repo, _, ticket_number = ref.rpartition("#")
+        try:
+            issue = fetch(f"/repos/{ticket_repo}/issues/{ticket_number}", token)
+            ticket_comments = paginate(
+                f"/repos/{ticket_repo}/issues/{ticket_number}/comments", token
+            )
+        except (OSError, ValueError) as error:
+            # A ref the token cannot read (foreign or private repo) is
+            # not this gate's to judge — say so and move on.
+            print(f"::notice::could not scan referenced ticket {ref}: {error}")
+            continue
+        tickets.append((ref, issue.get("body"), ticket_comments))
+    problems = leak_violations(
+        pr_surfaces(
+            pr,
+            commits,
+            files,
+            comments=paginate(f"/repos/{repo}/issues/{number}/comments", token),
+            reviews=paginate(f"/repos/{repo}/pulls/{number}/reviews", token),
+            review_comments=paginate(f"/repos/{repo}/pulls/{number}/comments", token),
+            tickets=tickets,
+        ),
+        values,
+    )
+    for problem in problems:
+        print(f"::error::{problem}")
+    if not problems:
+        print("No blocklisted string on any surface this PR publishes.")
+    return 1 if problems else 0
+
+
+# ------------------------------------------------------------ payload
+
+
+def payload_surfaces(event):
+    """The one item an issue/comment event just published, labeled.
+
+    The event-driven net (#208) reads nothing but the event: an
+    issue's title and body on `issues`, a comment's body on
+    `issue_comment` (PR conversation comments included) and
+    `pull_request_review_comment`. No repo walk, no API listing —
+    layer 3 owns the full history; this catches the item that just
+    went public, minutes instead of a day.
+    """
+    comment = event.get("comment")
+    if comment:
+        label = f"comment {comment.get('html_url')}"
+        if comment.get("path"):
+            label += f" on {comment['path']}"
+        return [(label, comment.get("body"))]
+    issue = event.get("issue") or event.get("pull_request") or {}
+    where = issue.get("html_url")
+    return [
+        (f"issue {where} title", issue.get("title")),
+        (f"issue {where} body", issue.get("body")),
+    ]
+
+
+def run_payload():
+    values = parse_blocklist(os.environ.get("PUSH_BLOCKLIST"))
+    if not values:
+        print("::warning::PUSH_BLOCKLIST is empty — the denylist layer is inactive")
+        return 0
+    with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
+        event = json.load(handle)
+    problems = leak_violations(payload_surfaces(event), values)
+    for problem in problems:
+        print(f"::error::{problem}")
+    if not problems:
+        print("No blocklisted string in the item this event published.")
+    return 1 if problems else 0
+
+
 def main():
     verb = sys.argv[1] if len(sys.argv) > 1 else ""
-    runners = {"ticket": run_ticket, "reviews": run_reviews, "aggregate": run_aggregate}
+    runners = {
+        "ticket": run_ticket,
+        "reviews": run_reviews,
+        "approval": run_approval,
+        "aggregate": run_aggregate,
+        "rerun": run_rerun,
+        "leaks": run_leaks,
+        "payload": run_payload,
+    }
     if verb not in runners:
         print(f"usage: check_gate.py {{{'|'.join(runners)}}}", file=sys.stderr)
         return 2

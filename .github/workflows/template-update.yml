@@ -173,6 +173,16 @@ jobs:
             --answers-file "$answers_file" \
             --defaults --trust --skip-tasks
 
+          # One skipped task must run anyway: the glossary prune (#67).
+          # Every update re-delivers the full shared term set, so without
+          # it each consumer ships orphans and disambiguate --lint goes
+          # red fleet-wide (#203). The script is the same one the task
+          # and the template repo run; it is read after the update so a
+          # bumped script or pin applies to its own release. Advisory
+          # like the task: an unconverged glossary is a lint finding,
+          # not a lost update.
+          bash scripts/ci/prune_glossary.sh || true
+
           new_ref="$(awk '$1 == "_commit:" {print $2}' "$answers_file")"
           {
             echo "old_ref=$old_ref"
