@@ -7,7 +7,7 @@
 # otherwise fail on code it cannot change.
 exclude: "CHANGELOG.md|.copier-answers.agentic.yml|.all-contributorsrc|\\.agents/skills|\\.claude/skills|scripts/ci/"
 default_stages: [pre-commit]
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-merge-commit, pre-push]
 
 ci:
   autofix_commit_msg: "chore(pre-commit.ci): auto fixes"
@@ -126,6 +126,33 @@ repos:
         language: script
         pass_filenames: false
         always_run: true
+      # Linear history (skills#147): a claude/* branch is rebased onto
+      # main, never merged into; the forge's own merges are the only
+      # merge commits. One script, three stages: the merge is refused
+      # as `git merge` would commit it, a conflicted merge finished by
+      # hand is refused at commit time, and the push is the backstop
+      # for one that got past both — judged on the branch's own range,
+      # so a merge main already holds passes.
+      - id: linear-history-merge
+        name: no merge commit on a working branch (merge)
+        entry: scripts/check-linear-history.sh --merge
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-merge-commit]
+      - id: linear-history-commit
+        name: no merge commit on a working branch (commit)
+        entry: scripts/check-linear-history.sh --commit
+        language: script
+        pass_filenames: false
+        always_run: true
+      - id: linear-history
+        name: no merge commit on a working branch (push)
+        entry: scripts/check-linear-history.sh --push
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
       - id: disambiguate-lint
         name: disambiguate --lint
         entry: uvx disambiguate==0.3.0 --lint
