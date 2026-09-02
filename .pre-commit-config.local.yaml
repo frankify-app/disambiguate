@@ -1,0 +1,12 @@
+# Repo-owned hooks — this file belongs to Disambiguate, not
+# to the agentic template.
+#
+# The template seeds it once and never stamps it again, so the vendored
+# drift check never judges it and `copier update` never conflicts with
+# it. Put the hooks that only this repo needs here (language formatters,
+# type checkers, project-specific scripts); the shared hooks stay in
+# `.pre-commit-config.yaml`, which the template owns.
+#
+# The stamped config runs this file through a `repo-hooks` hook, so
+# everything below fires on the same commit as the shared hooks.
+repos: []
