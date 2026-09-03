@@ -120,11 +120,13 @@ repos:
       # and never stamps again. Delegating keeps them on the same
       # commit as the shared hooks without giving the repo a reason to
       # edit this template-owned file — which the vendored drift check
-      # would then flag on every run. No staged files, or no local
-      # config, means nothing to run.
+      # would then flag on every run. No staged files, no local
+      # config, or a seeded config that still defines no hooks
+      # (repos: []) all mean nothing to run — prek exits nonzero on
+      # a hookless config, so that case is filtered here (#236).
       - id: repo-hooks
         name: repo-owned hooks
-        entry: bash -c '[ "$#" -gt 0 ] && [ -f .pre-commit-config.local.yaml ] || exit 0; exec prek run --config .pre-commit-config.local.yaml --files "$@"' --
+        entry: bash -c '[ "$#" -gt 0 ] && [ -f .pre-commit-config.local.yaml ] || exit 0; grep -qE "^\s*-\s*repo:" .pre-commit-config.local.yaml || exit 0; exec prek run --config .pre-commit-config.local.yaml --files "$@"' --
         language: system
       - id: disambiguate-lint
         name: disambiguate --lint
