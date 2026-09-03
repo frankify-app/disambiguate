@@ -135,7 +135,7 @@ jobs:
         run: |
           merges="$(git rev-list --merges ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})"
           [ -z "$merges" ] && { echo "The PR's range is linear."; exit 0; }
-          git log --no-walk --format='%h %s' $merges
+          echo "$merges" | xargs git log --no-walk --format='%h %s'
           echo "::error::The PR carries merge commit(s). A working branch is rebased onto main, never merged into (skills#147): git rebase origin/main, then push with --force-with-lease."
           exit 1
 
