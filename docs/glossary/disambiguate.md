@@ -17,6 +17,7 @@ operating modes:
   [lint](lint.md).
 
 Plus `--explain`, which always renders Disambiguate's own bundled glossary
+<!-- d10e: ignore[wrong-alias] principal -->
 (this very glossary) regardless of which user glossary is in scope. The
 intended audience for `--explain` is an LLM agent that needs to understand
 Disambiguate's vocabulary before generating glossary content of its own.

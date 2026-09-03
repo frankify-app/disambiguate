@@ -7,7 +7,7 @@
 # otherwise fail on code it cannot change.
 exclude: "CHANGELOG.md|.copier-answers.agentic.yml|.all-contributorsrc|\\.agents/skills|\\.claude/skills|scripts/ci/"
 default_stages: [pre-commit]
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-merge-commit, pre-push]
 
 ci:
   autofix_commit_msg: "chore(pre-commit.ci): auto fixes"
@@ -24,16 +24,6 @@ repos:
     rev: v6.0.0
     hooks:
       - id: check-json
-      - id: debug-statements
-      - id: check-builtin-literals
-      - id: check-case-conflict
-      - id: check-docstring-first
-      - id: check-toml
-      - id: check-xml
-      - id: check-yaml
-      - id: detect-private-key
-      - id: end-of-file-fixer
-      - id: trailing-whitespace
   - repo: https://github.com/DavidAnson/markdownlint-cli2
     rev: v0.22.0
     hooks:
@@ -43,6 +33,11 @@ repos:
     hooks:
       - id: yamllint
         args: [--strict]
+  # Credential class (#189): stock rules over the staged diff, offline.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.7
     hooks:
@@ -54,34 +49,6 @@ repos:
     rev: v2.4.2
     hooks:
       - id: codespell
-  # Language-specific hooks below are owned by this repo, not the agentic
-  # template — keep them when reconciling `copier update`.
-  - repo: https://github.com/tox-dev/pyproject-fmt
-    rev: "v2.21.1"
-    hooks:
-      - id: pyproject-fmt
-  - repo: https://github.com/astral-sh/uv-pre-commit
-    rev: 0.11.7
-    hooks:
-      - id: uv-lock
-  - repo: https://github.com/oxc-project/mirrors-oxfmt
-    rev: v0.45.0
-    hooks:
-      - id: oxfmt
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.15.11
-    hooks:
-      - id: ruff-check
-        args: [--fix, --exit-non-zero-on-fix]
-      - id: ruff-format
-  - repo: local
-    hooks:
-      - id: local-mypy
-        name: mypy
-        entry: uv run mypy src tests
-        require_serial: true
-        language: system
-        pass_filenames: false
   - repo: local
     hooks:
       # Glossary lint, template-owned so repos don't need a colliding
@@ -90,6 +57,77 @@ repos:
       # Roots come from the agentic_disambiguate_roots answer: prek has no
       # repo-owned env file to feed DISAMBIGUATE_ROOTS through, so answer
       # data is the only place roots survive `copier update` unpatched.
+      # Identity class (#189): PUSH_BLOCKLIST is `|`-separated values
+      # in env, never committed — exactly grep's alternation syntax.
+      # An entry may name its placeholder (`value=pb:name`); labels
+      # are metadata and are stripped before the pattern is built.
+      # `-l` prints only the offending FILE, never the matched line;
+      # unset env means the layer is off and the hook passes. The
+      # pattern is normalized first (CR/LF and stray pipes stripped):
+      # an editor-saved trailing newline would otherwise put an empty
+      # alternative into the pattern, matching every file.
+      - id: push-blocklist
+        name: no blocklisted string in staged files
+        entry: bash -c 'p=$(printf %s "${PUSH_BLOCKLIST:-}" | tr -d "\r\n" | sed "s/=[^|]*//g;s/||*/|/g;s/^|//;s/|$//"); [ -z "$p" ] || ! grep -IilE -- "$p" "$@"' --
+        language: system
+      # The same gate at the commit-msg stage: messages auto-publish
+      # on push with no approval step, and the pre-commit stage fires
+      # before a message exists. Git hands this hook the message file.
+      - id: push-blocklist-msg
+        name: no blocklisted string in the commit message
+        entry: bash -c 'p=$(printf %s "${PUSH_BLOCKLIST:-}" | tr -d "\r\n" | sed "s/=[^|]*//g;s/||*/|/g;s/^|//;s/|$//"); [ -z "$p" ] || ! grep -IilE -- "$p" "$@"' --
+        language: system
+        stages: [commit-msg]
+      # Branch discipline (skills#147): a claude/* branch must match
+      # the vendored branch_pattern — shortcode-qualified ticket
+      # tokens, then the slug — or the ticket gate's branch half
+      # silently never fires on it.
+      - id: branch-name
+        name: branch name matches the ticket gate's branch_pattern
+        entry: scripts/check-branch-name.sh
+        language: script
+        pass_filenames: false
+        always_run: true
+      # Linear history (skills#147): a claude/* branch is rebased onto
+      # main, never merged into; the forge's own merges are the only
+      # merge commits. One script, three stages: the merge is refused
+      # as `git merge` would commit it, a conflicted merge finished by
+      # hand is refused at commit time, and the push is the backstop
+      # for one that got past both — judged on the branch's own range,
+      # so a merge main already holds passes.
+      - id: linear-history-merge
+        name: no merge commit on a working branch (merge)
+        entry: scripts/check-linear-history.sh --merge
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-merge-commit]
+      - id: linear-history-commit
+        name: no merge commit on a working branch (commit)
+        entry: scripts/check-linear-history.sh --commit
+        language: script
+        pass_filenames: false
+        always_run: true
+      - id: linear-history
+        name: no merge commit on a working branch (push)
+        entry: scripts/check-linear-history.sh --push
+        language: script
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]
+      # Repo-owned hooks (#216): a repo's own language hooks live in
+      # `.pre-commit-config.local.yaml`, which the template seeds once
+      # and never stamps again. Delegating keeps them on the same
+      # commit as the shared hooks without giving the repo a reason to
+      # edit this template-owned file — which the vendored drift check
+      # would then flag on every run. No staged files, no local
+      # config, or a seeded config that still defines no hooks
+      # (repos: []) all mean nothing to run — prek exits nonzero on
+      # a hookless config, so that case is filtered here (#236).
+      - id: repo-hooks
+        name: repo-owned hooks
+        entry: bash -c '[ "$#" -gt 0 ] && [ -f .pre-commit-config.local.yaml ] || exit 0; grep -qE "^\s*-\s*repo:" .pre-commit-config.local.yaml || exit 0; exec prek run --config .pre-commit-config.local.yaml --files "$@"' --
+        language: system
       - id: disambiguate-lint
         name: disambiguate --lint
         entry: uvx disambiguate==0.3.0 --lint

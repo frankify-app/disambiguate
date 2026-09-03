@@ -33,28 +33,6 @@ to resolve all referenced terms at once.
 
 Read [docs/architecture.md](docs/architecture.md) before touching any code.
 
-### Introducing new terms
-
-Follow the link-as-if-exists convention (see
-[docs/glossary/cross-reference.md](docs/glossary/cross-reference.md)): a new
-domain concept is introduced by cross-referencing its slug *as if the term
-file already existed*, then creating `docs/glossary/<slug>.md`. Until the
-file exists, `--lint` reports the link as a fatal broken cross-reference —
-that is the enforcement, not a bug.
-
-Tickets declare new vocabulary under an `Introduces:` list, one slug per
-line, each linked as if it existed:
-
-```markdown
-## Introduces
-
-- [drift-baseline](../blob/main/docs/glossary/drift-baseline.md) — checked-in record of grandfathered drift
-```
-
-The `Introduces:` list is the durable record of the vocabulary a ticket
-intends to add; the linked term files are created by the ticket's
-implementation.
-
 ## Rules
 
 - Small, single-purpose files
@@ -152,10 +130,20 @@ Code-specific skills:
 
 ## Git
 
-- Branch: `<agent>/<issue-number>-<desc>` (e.g. `hermes/42-fix-auth`, `claude/42-fix-auth`)
+- Branch: `<agent>/<code><ticket>[-<code><ticket>…]-<desc>` (e.g. `claude/42-fix-auth`, `claude/sk162-session-probe`) — the lowercase repo shortcode is optional per token and expresses a cross-repo arc (same branch name in every repo the arc touches); every token's ticket number must be referenced in the PR body
 - Never push to `main`
 - Create PR immediately on branch creation
 - Commits: conventional commits
+- **Merge commits only on `main`** — feature branches rebase onto
+  `main`, never merge it in; the `commitlint` job rejects `Merge`
+  headers on PR commits.
+- **A fix to this branch's own commits is a `fixup!`**
+  (`git commit --fixup <sha>`), never a standalone `fix:`/`refactor:`
+  commit — fold before merge with
+  `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash`. The commitlint
+  gate stays red while a `fixup!` exists: that is the fold reminder,
+  not a failure to route around. Standalone `fix:` commits are for
+  defects that already exist on `main`.
 - **Ticket references in PR bodies are ALL CAPS, from the central list**
   (`.github/reference-keywords.json`, enforced by the `ticket` job):
   `CLOSES #n` / `FIXES #n` close on merge,
@@ -164,13 +152,13 @@ Code-specific skills:
   (close, closes, closed, fix, fixes, fixed, resolve, resolves, resolved) in any other casing fails
   the gate — the forge would act on it whether or not the gate
   recognized the reference. Every ticket number in a
-  `claude/(\d+(?:-\d+)*)-` branch must appear as a canonical
+  `claude/((?:[a-z][a-z0-9]*?)?\d+(?:-(?:[a-z][a-z0-9]*?)?\d+)*)-` branch must appear as a canonical
   reference in the body.
-- **Answer every review comment with a full commit URL or `No commit: <why>`**
-  (enforced by the `review-answers` job): the commit URL must be a real
-  commit on the PR — verify with `git rev-parse` before pasting, never
-  expand a short hash from memory — and resolving a thread is not
-  answering it.
+- **Answer every review comment by naming the fixing commit or `No commit: <why>`**
+  (enforced by the `review-answers` job): the commit — as a URL or a
+  sha of seven or more hex digits — must be a real commit on the PR;
+  verify with `git rev-parse` before pasting, never expand a short hash
+  from memory, and resolving a thread is not answering it.
 - Document unexpected encounters and design decisions in commit message as well as PR/Issue
 - **A push rejected over a commit you did not write is rebased around, never forced.**
   Branch rules re-evaluate every commit an update spans, not just the new ones,
@@ -320,13 +308,9 @@ The modes below are the kinds of work the user will ask for. **Each runs in its 
 - Only **edit** issue content when the user explicitly requests it → `gh issue edit`. Editing is gated on explicit request because it can overwrite human-authored intent; commenting is always safe, editing is not.
 - Then re-enter the **Implement** workflow.
 
-## Commands
-
-`make <cmd>`: `check`, `test`, `unit-test`, `lint`, `mypy`, `auto-format`, `install`, `main`, `run`, `help`
-
 ## Dependencies
 
-Add packages using the package manager only — `uv add <package>` in this repo — never edit requirements/dependencies directly (since your knowledge cut-off prevents you from knowing the latest version of the packages).
+Add packages using the package manager only, never edit requirements/dependencies directly (since your knowledge cut-off prevents you from knowing the latest version of the packages).
 
 ## Documentation
 

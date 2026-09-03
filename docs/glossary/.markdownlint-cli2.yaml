@@ -2,10 +2,10 @@
 # so the first-line-h1 rule does not apply here.
 #
 # MD049 (consistent emphasis style) resolves to asterisk in any term file
-# that also emphasizes prose, which puts it at odds with the literal
-# `_Avoid_:` prefix the avoided-term grammar requires (adr 0001). The
-# prefix is a token of the glossary format, not emphasis the author chose,
-# so the rule is off here rather than the grammar bent to suit it.
+# that also emphasizes prose, which collides with the literal `_Avoid_:`
+# prefix the avoided-term grammar requires. The prefix is a token of the
+# glossary format, not emphasis the author chose, so the rule is off here
+# rather than the grammar bent to suit it.
 config:
   MD041: false
   MD049: false

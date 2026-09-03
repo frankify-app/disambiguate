@@ -176,3 +176,9 @@ changelog.exclude_commit_patterns = [
   "Initial [Cc]ommit.*",         # codespell:ignore
 ]
 changelog.environment.keep_trailing_newline = true
+
+[tool.disambiguate]
+# The stamped record-contract term mentions this repo's own `slug` term
+# without linking it; the file is template-owned (never edited here),
+# so the finding is scoped away instead (agentic-engineering-template#198).
+drift-ignore-paths = { "docs/glossary/record-contract.md" = [ "unlinked-term" ] }

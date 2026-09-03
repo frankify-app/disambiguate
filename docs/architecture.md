@@ -63,6 +63,7 @@ stdin. Glossary-shaped links with broken slugs raise; non-glossary links
 ### `--explain [SLUG ...]`
 
 Always renders Disambiguate's own bundled glossary, regardless of what
+<!-- d10e: ignore[wrong-alias] principal -->
 [glossary-format](glossary/glossary-format.md)-compatible glossary the user
 might be in. Loads `disambiguate/_glossary/` via `importlib.resources`,
 normalizes direct CLI slug arguments, prepends the agent-targeted preamble,

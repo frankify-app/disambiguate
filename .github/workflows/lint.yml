@@ -32,9 +32,72 @@ jobs:
             exit 1
           fi
 
+  # Rendered even when agentic_precommit is 'none' for the same reason
+  # as the marker check: vendored files are template-owned (#196), and
+  # a hand-edit to one must go red here rather than drift silently —
+  # that is how hand-copied workflows went unnoticed. Recopying the
+  # STAMPED ref makes this a local-modification check only; being
+  # behind the template is the template-update weekly audit's job.
+  template-drift:
+    name: "vendored files match the stamped template"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Recopy the stamped template version and diff
+        run: |
+          set -euo pipefail
+          answers_file=".copier-answers.agentic.yml"
+          if [ ! -f "$answers_file" ]; then
+            echo "No $answers_file — not a stamped repo; nothing to check."
+            exit 0
+          fi
+          stamped="$(awk '$1 == "_commit:" {print $2}' "$answers_file")"
+
+          # Seeded (_skip_if_exists) files already exist, so recopy
+          # leaves them alone — they stay exempt structurally. Every
+          # other stamped file, CLAUDE.md included, is template-owned
+          # and must not drift in any repo (#199): --overwrite lets a
+          # runner with no terminal past copier's "Overwrite?" prompt
+          # so the diff below judges the drift instead of the job
+          # dying before it — fail loudly, never exempt silently.
+          uvx --with copier-template-extensions copier recopy \
+            --answers-file "$answers_file" \
+            --defaults --trust --skip-tasks --overwrite --vcs-ref "$stamped"
+
+          # The recopy re-delivers every shared glossary term, including
+          # the ones this repo's stamp pruned as unlinked (#67). Prune
+          # again, with the same script the update ran, so the diff
+          # judges the converged state, not the raw render (#203).
+          bash scripts/ci/prune_glossary.sh || true
+
+          # skills-lock.json: the post-render skill installer recomputes
+          # every computedHash from the installed files, so the stamped
+          # hashes are stale by construction (#214). Judge the lock with
+          # that one installer-owned field blanked — a differing skill
+          # set, source or path still fails loudly below.
+          if [ -f skills-lock.json ] && git cat-file -e HEAD:skills-lock.json 2>/dev/null; then
+            strip='walk(if type == "object" and has("computedHash") then .computedHash = "" else . end)'
+            if [ "$(git show HEAD:skills-lock.json | jq -S "$strip")" = "$(jq -S "$strip" skills-lock.json)" ]; then
+              git checkout -- skills-lock.json
+            fi
+          fi
+
+          if [ -n "$(git status --porcelain)" ]; then
+            git status --porcelain
+            git diff
+            echo "::error::Vendored files differ from the stamped template ($stamped). These files are template-owned: change them in the template repo and let the release fan-out deliver the update, or revert the local edit."
+            exit 1
+          fi
+          echo "Vendored files match the stamped template ($stamped)."
+
   # Full conventional commits on every PR commit (#137): the type enum
-  # IS the allow-list — `fixup!`/`squash!` fail header parsing and
-  # `wip` is not a type, so "unsquashed history" stays safe to require.
+  # IS the allow-list — `wip` is not a type, and the config turns
+  # commitlint's defaultIgnores off so `fixup!`/`squash!` headers are
+  # parsed (and fail) instead of silently skipped (#196). That keeps
+  # "unsquashed history" safe to require.
   commitlint:
     name: "commitlint (PR commits)"
     if: ${{ github.event_name == 'pull_request' }}
@@ -53,6 +116,28 @@ jobs:
         run: |
           npm install --no-save --no-audit --no-fund @commitlint/cli@19 @commitlint/config-conventional@19
           npx --no-install commitlint --config commitlint.config.mjs --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }}
+
+  # Linear history (skills#147): a working branch is rebased onto
+  # main, never merged into. The commit hooks refuse the merge locally;
+  # this is the layer a --no-verify or a hookless clone cannot skip.
+  # Judged on the PR's own range, so the forge's merges on main are
+  # never in it.
+  linear-history:
+    name: "linear history (PR commits)"
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+
+      - name: No merge commit in the PR's range
+        run: |
+          merges="$(git rev-list --merges ${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }})"
+          [ -z "$merges" ] && { echo "The PR's range is linear."; exit 0; }
+          echo "$merges" | xargs git log --no-walk --format='%h %s'
+          echo "::error::The PR carries merge commit(s). A working branch is rebased onto main, never merged into (skills#147): git rebase origin/main, then push with --force-with-lease."
+          exit 1
 
   prek:
     name: "prek (all hooks, all files)"

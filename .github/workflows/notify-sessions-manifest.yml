@@ -5,6 +5,10 @@ name: Notify sessions manifest
 # tell meta to regenerate environment/repos.manifest — no cron, no
 # waiting. meta re-enumerates the whole org on every dispatch, so this
 # event also prunes entries for repos that vanished since the last run.
+#
+# Vendored unconditionally: the paths filter makes it inert in any
+# repo without a `.pandoscope-sessions` marker. The marker itself is a
+# per-repo opt-in the template never stamps.
 on:
   push:
     branches: [main]
@@ -15,7 +19,7 @@ permissions: {}
 jobs:
   dispatch:
     name: "dispatch sessions-marker-changed to meta"
-    runs-on: blacksmith-2vcpu-ubuntu-2204
+    runs-on: ubuntu-latest
     steps:
       - name: Mint release-bot installation token
         id: app-token
