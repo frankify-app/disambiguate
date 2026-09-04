@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
-"""Cap on source file length, run over the files a commit touches (#239).
+"""Cap on what a source file costs to read, run over the files a commit
+touches (#239, #242).
 
-Nothing else in the stamped lint config reads file length, so a file
-grows until a reader notices. This fails on any source file over the
-limit, naming the path and the count, and exempts only what the repo's
-own `.file-length-allowlist` names — each entry carrying the ticket
-that will bring the file back under, so the list shrinks rather than
-becoming permanent.
+The cap is an estimated token count — file bytes / 4, rounded up —
+because tokens are what an agent pays for a Read: comments and blank
+lines count, and the language's density stops mattering. Complexity is
+measured independently (ruff carries it for Python); for bash, which
+ruff cannot read, this hook also counts code lines — non-blank,
+non-comment — because a long bash script is a rewrite-in-Python signal
+and a total measure would punish exactly the comments that make bash
+safer.
 
-Three things make an entry leave the list, all of them checked here: a
-ticket is missing, the file came back under the limit, or the file is
-gone. The list is the repo's own file, seeded once and never stamped
-again.
+A file over a cap fails, naming the path and the measure, unless the
+repo's own `.file-length-allowlist` names it — each entry carrying the
+ticket that will bring the file back under, so the list shrinks rather
+than becoming permanent. Three things make an entry leave the list, all
+checked here: a ticket is missing, the file came back under every cap
+that applies to it, or the file is gone.
 
 Stdlib only, and no repo state beyond the paths it is handed: prek runs
 this on every commit, on whatever `python3` the contributor has.
@@ -25,7 +30,17 @@ import re
 import sys
 
 ALLOWLIST = ".file-length-allowlist"
-DEFAULT_MAX_LINES = 800
+DEFAULT_MAX_TOKENS = 10000
+DEFAULT_SH_CODE_LINES = 150
+DEFAULT_CODE_LINES = 500
+SH_SUFFIXES = (".sh", ".bash")
+CODE_SUFFIXES = (".py", ".mjs", ".cjs", ".js", ".jsx", ".ts", ".tsx")
+# Line-based comment heuristics — all a hard limit needs. Python's is
+# exact; the js family's misses code after a same-line block comment,
+# which only ever under-counts.
+COMMENT_MARKS = {".py": ("#",)}
+for _suffix in (".mjs", ".cjs", ".js", ".jsx", ".ts", ".tsx"):
+    COMMENT_MARKS[_suffix] = ("//", "/*", "*", "*/")
 
 # `#123` or `owner/repo#123`, the same reference shape the ticket gate
 # reads on a pull request body.
@@ -60,59 +75,120 @@ def parse_allowlist(text: str) -> tuple[dict[str, str], list[str]]:
     return entries, problems
 
 
+def measure(path: str) -> tuple[int, int | None, str | None] | None:
+    """(estimated tokens, code lines, kind) — None for a non-text file.
+
+    Tokens are bytes / 4 rounded up: dependency-free, monotone, close
+    enough for a hard cap, and charged to every file a model reads —
+    prose and config cost a Read what source costs. Code lines (neither
+    blank nor comment) are counted for code files only: kind "sh" gets
+    the bash limit, kind "code" the general one, None only the cap.
+    """
+    try:
+        with open(path, "rb") as handle:
+            data = handle.read()
+        text = data.decode("utf-8")
+    except (OSError, UnicodeDecodeError):
+        return None
+    tokens = (len(data) + 3) // 4
+    plain = path[: -len(".jinja")] if path.endswith(".jinja") else path
+    suffix = "." + plain.rsplit(".", 1)[-1] if "." in plain else ""
+    kind = (
+        "sh" if suffix in SH_SUFFIXES else "code" if suffix in CODE_SUFFIXES else None
+    )
+    if kind is None:
+        return tokens, None, None
+    marks = COMMENT_MARKS.get(suffix, ("#",))
+    code = sum(
+        1
+        for line in text.splitlines()
+        if line.strip() and not line.strip().startswith(marks)
+    )
+    return tokens, code, kind
+
+
 def review(
-    counts: dict[str, int],
-    limit: int,
+    measures: dict[str, tuple[int, int | None, str | None]],
+    token_limit: int,
+    sh_limit: int,
+    code_limit: int,
     allowlist: dict[str, str],
     missing: set[str],
 ) -> list[str]:
     """Every problem this run found, as lines a reader can act on.
 
-    `counts` holds only the files this run was handed, which is why an
+    `measures` holds only the files this run was handed, which is why an
     untouched overrun elsewhere is nobody's commit to block: the hook
     judges what the commit touched. `missing` names allowlisted paths
     that are no longer on disk.
     """
     problems = []
-    for path in sorted(counts):
-        lines = counts[path]
-        if lines <= limit or path in allowlist:
+    for path in sorted(measures):
+        if path in allowlist:
             continue
-        problems.append(
-            f"{path}: {lines} lines, over the {limit}-line limit — split it, "
-            f"or add `{path}  # <ticket>` to {ALLOWLIST}"
-        )
+        tokens, code, kind = measures[path]
+        if tokens > token_limit:
+            problems.append(
+                f"{path}: ~{tokens} tokens (bytes/4), over the {token_limit}-token "
+                f"cap — split it, or add `{path}  # <ticket>` to {ALLOWLIST}"
+            )
+        if kind == "sh" and code is not None and code > sh_limit:
+            problems.append(
+                f"{path}: {code} code lines, over the {sh_limit}-line bash limit — "
+                f"rewrite it in Python or split out a sourced library, or add "
+                f"`{path}  # <ticket>` to {ALLOWLIST}"
+            )
+        elif kind == "code" and code is not None and code > code_limit:
+            problems.append(
+                f"{path}: {code} code lines, over the {code_limit}-line limit — "
+                f"split it, or add `{path}  # <ticket>` to {ALLOWLIST}"
+            )
     for path, ticket in sorted(allowlist.items()):
         if path in missing:
             problems.append(
                 f"{ALLOWLIST}: {path} no longer exists — remove its line "
                 f"(ticket {ticket})"
             )
-        elif path in counts and counts[path] <= limit:
-            problems.append(
-                f"{ALLOWLIST}: {path} is {counts[path]} lines, at or under the "
-                f"{limit}-line limit — remove its line (ticket {ticket})"
-            )
+        elif path in measures:
+            tokens, code, kind = measures[path]
+            limit = sh_limit if kind == "sh" else code_limit
+            over = tokens > token_limit or (code is not None and code > limit)
+            if not over:
+                problems.append(
+                    f"{ALLOWLIST}: {path} is back under every cap that applies "
+                    f"to it — remove its line (ticket {ticket})"
+                )
     return problems
-
-
-def count_lines(path: str) -> int | None:
-    """Lines in a text file, or None for anything that is not one."""
-    try:
-        with open(path, encoding="utf-8") as handle:
-            return sum(1 for _ in handle)
-    except (OSError, UnicodeDecodeError):
-        return None
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
-        "--max",
-        dest="limit",
+        "--max-tokens",
+        dest="token_limit",
         type=int,
-        default=DEFAULT_MAX_LINES,
-        help=f"lines a source file may have (default {DEFAULT_MAX_LINES})",
+        default=DEFAULT_MAX_TOKENS,
+        help=f"estimated tokens a file may cost (default {DEFAULT_MAX_TOKENS})",
+    )
+    parser.add_argument(
+        "--max-sh-code-lines",
+        dest="sh_limit",
+        type=int,
+        default=DEFAULT_SH_CODE_LINES,
+        help=(
+            "non-blank non-comment lines a bash file may have "
+            f"(default {DEFAULT_SH_CODE_LINES})"
+        ),
+    )
+    parser.add_argument(
+        "--max-code-lines",
+        dest="code_limit",
+        type=int,
+        default=DEFAULT_CODE_LINES,
+        help=(
+            "non-blank non-comment lines a code file may have "
+            f"(default {DEFAULT_CODE_LINES})"
+        ),
     )
     parser.add_argument(
         "--allowlist",
@@ -128,14 +204,16 @@ def main(argv: list[str] | None = None) -> int:
         with open(args.allowlist, encoding="utf-8") as handle:
             allowlist, problems = parse_allowlist(handle.read())
 
-    counts = {}
+    measures = {}
     for path in args.paths:
-        lines = count_lines(path)
-        if lines is not None:
-            counts[path] = lines
+        measured = measure(path)
+        if measured is not None:
+            measures[path] = measured
     missing = {path for path in allowlist if not os.path.exists(path)}
 
-    problems += review(counts, args.limit, allowlist, missing)
+    problems += review(
+        measures, args.token_limit, args.sh_limit, args.code_limit, allowlist, missing
+    )
     for problem in problems:
         print(problem, file=sys.stderr)
     return 1 if problems else 0
