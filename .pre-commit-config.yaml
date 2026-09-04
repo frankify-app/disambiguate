@@ -115,6 +115,18 @@ repos:
         pass_filenames: false
         always_run: true
         stages: [pre-push]
+      # Source length (#239): nothing else here reads how long a file
+      # is, so files grow until a reader notices. The limit is the
+      # agentic_max_file_lines answer, so a repo widens it deliberately
+      # and its answers file records that it did. Existing overruns go
+      # on .file-length-allowlist, each with the ticket that will bring
+      # it back under — an entry without one is refused, and an entry
+      # whose file came back under the limit has to leave the list.
+      - id: file-length
+        name: no source file over the line limit
+        entry: python3 scripts/check_file_length.py --max 800
+        language: system
+        files: \.(py|mjs|cjs|js|jsx|ts|tsx|sh|bash)(\.jinja)?$
       # Repo-owned hooks (#216): a repo's own language hooks live in
       # `.pre-commit-config.local.yaml`, which the template seeds once
       # and never stamps again. Delegating keeps them on the same
