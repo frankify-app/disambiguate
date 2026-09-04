@@ -884,6 +884,21 @@ def referenced_tickets(body, repo):
     return sorted(refs)
 
 
+def added_lines(patch):
+    """The published side of a unified diff: `+` lines, marker stripped.
+
+    A removal cannot publish anything main does not already publish,
+    and the PR that scrubs a value from main is exactly the one whose
+    removal lines carry it — scanning them made a scrub unable to pass
+    (#238). The `+++` header names a file, not content, and is skipped.
+    """
+    return "\n".join(
+        line[1:]
+        for line in (patch or "").splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    )
+
+
 def pr_surfaces(
     pr, commits, files, comments=(), reviews=(), review_comments=(), tickets=()
 ):
@@ -916,7 +931,9 @@ def pr_surfaces(
             surfaces.append((f"commit {sha} {role} name", who.get("name")))
             surfaces.append((f"commit {sha} {role} email", who.get("email")))
     for changed in files:
-        surfaces.append((f"diff of {changed['filename']}", changed.get("patch")))
+        surfaces.append(
+            (f"diff of {changed['filename']}", added_lines(changed.get("patch")))
+        )
     for comment in comments:
         surfaces.append((f"comment {comment['id']}", comment.get("body")))
     for review in reviews:
